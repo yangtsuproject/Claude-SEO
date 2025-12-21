@@ -1,0 +1,83 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  clerkId   String    @unique
+  email     String    @unique
+  name      String?
+  projects  Project[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Project {
+  id              String            @id @default(cuid())
+  name            String
+  domain          String?
+  targetLocation  String            @default("Singapore")
+  userId          String
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keywordResearch KeywordResearch[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model KeywordResearch {
+  id           String    @id @default(cuid())
+  seedKeywords String[]
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keywords     Keyword[]
+  clusters     Cluster[]
+  status       String    @default("pending") // pending, processing, completed, failed
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Keyword {
+  id                String          @id @default(cuid())
+  keyword           String
+  searchVolume      Int?
+  difficulty        Int?
+  cpc               Float?
+  competition       String?
+  trend             Json?
+  searchIntent      String?
+  keywordResearchId String
+  keywordResearch   KeywordResearch @relation(fields: [keywordResearchId], references: [id], onDelete: Cascade)
+  clusterId         String?
+  cluster           Cluster?        @relation(fields: [clusterId], references: [id])
+  createdAt         DateTime        @default(now())
+
+  @@index([keyword])
+  @@index([keywordResearchId])
+}
+
+model Cluster {
+  id                String          @id @default(cuid())
+  name              String
+  type              String          @default("main")
+  recommendedUrl    String?
+  keywords          Keyword[]
+  keywordResearchId String
+  keywordResearch   KeywordResearch @relation(fields: [keywordResearchId], references: [id], onDelete: Cascade)
+  parentClusterId   String?
+  parentCluster     Cluster?        @relation("ClusterHierarchy", fields: [parentClusterId], references: [id])
+  subClusters       Cluster[]       @relation("ClusterHierarchy")
+  keywordCount      Int             @default(0)
+  searchIntent      String?
+  createdAt         DateTime        @default(now())
+
+  @@index([keywordResearchId])
+}
