@@ -99,7 +99,7 @@ export class DataForSEOService {
             language_code: 'en', // English
             include_seed_keyword: true,
             include_serp_info: true,
-            limit: 30, // Get top 30 related keywords per seed
+            limit: 50, // Get top 50 related keywords per seed
           },
         ];
 
