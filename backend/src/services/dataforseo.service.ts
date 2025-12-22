@@ -110,10 +110,26 @@ export class DataForSEOService {
           requestBody
         );
 
-        console.log(`  Response status: ${response.data?.tasks?.[0]?.status_message || 'unknown'}`);
+        // Log the full response for debugging
+        console.log(`  Full API response:`, JSON.stringify(response.data, null, 2));
 
-        if (response.data?.tasks?.[0]?.result?.[0]?.items) {
-          const items = response.data.tasks[0].result[0].items;
+        // Check if we have a valid response structure
+        if (!response.data || !response.data.tasks || !Array.isArray(response.data.tasks)) {
+          console.error(`  ❌ Invalid response structure - no tasks array`);
+          continue;
+        }
+
+        const task = response.data.tasks[0];
+        console.log(`  Task status: ${task?.status_code} - ${task?.status_message}`);
+
+        // Check if task succeeded
+        if (task?.status_code !== 20000) {
+          console.error(`  ❌ Task failed with code ${task?.status_code}: ${task?.status_message}`);
+          continue;
+        }
+
+        if (task?.result?.[0]?.items && Array.isArray(task.result[0].items)) {
+          const items = task.result[0].items;
 
           items.forEach((item: any) => {
             allKeywords.push({
@@ -128,7 +144,8 @@ export class DataForSEOService {
 
           console.log(`  ✅ Found ${items.length} keywords for "${keyword}"`);
         } else {
-          console.warn(`  ⚠️  No results for "${keyword}"`);
+          console.warn(`  ⚠️  No items in result for "${keyword}"`);
+          console.warn(`  Result structure:`, JSON.stringify(task?.result, null, 2));
         }
 
         // Small delay between requests to avoid rate limiting
@@ -146,19 +163,33 @@ export class DataForSEOService {
       console.log(`✅ Total unique keywords fetched: ${uniqueKeywords.length}`);
 
       if (uniqueKeywords.length === 0) {
-        throw new Error('No keyword data returned from DataForSEO API. Please check your credits and try again.');
+        throw new Error('No keyword data returned from DataForSEO Labs API. This could mean: 1) No credits available, 2) DataForSEO Labs not enabled on your account, or 3) Keywords not found. Check Railway logs for details.');
       }
 
       return uniqueKeywords;
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const errorData = error.response?.data;
-        console.error('❌ DataForSEO API Error:', errorData || error.message);
+        console.error('❌ DataForSEO API Request Failed:');
+        console.error('   Status:', error.response?.status);
+        console.error('   Response:', JSON.stringify(errorData, null, 2));
+        console.error('   Message:', error.message);
+
+        // Check for common errors
+        if (error.response?.status === 401) {
+          throw new Error('DataForSEO authentication failed. Check your DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD in Railway.');
+        }
+
+        if (error.response?.status === 402) {
+          throw new Error('Insufficient DataForSEO credits. Please add credits to your DataForSEO account.');
+        }
 
         throw new Error(
-          `DataForSEO API Error: ${errorData?.status_message || error.message}`
+          `DataForSEO API Error (${error.response?.status || 'unknown'}): ${errorData?.status_message || errorData?.tasks?.[0]?.status_message || error.message}`
         );
       }
+
+      console.error('❌ Unexpected error:', error);
       throw error;
     }
   }
