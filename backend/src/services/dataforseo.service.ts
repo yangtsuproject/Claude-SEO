@@ -47,12 +47,12 @@ export interface KeywordData {
  * Handles all interactions with the DataForSEO Keywords Data API
  */
 export class DataForSEOService {
-  // Using SERP API for organic keyword research
-  private apiUrl = 'https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_suggestions/live';
+  // Using DataForSEO Labs Related Keywords API (properly respects location)
+  private apiUrl = 'https://api.dataforseo.com/v3/dataforseo_labs/google/related_keywords/live';
   private username: string;
   private password: string;
   private axiosInstance: AxiosInstance;
-  private readonly DEFAULT_LOCATION = 2702; // Singapore location code (verified)
+  private readonly DEFAULT_LOCATION = 2702; // Singapore location code
 
   constructor() {
     this.username = process.env.DATAFORSEO_LOGIN || '';
@@ -97,13 +97,14 @@ export class DataForSEOService {
             keyword: keyword.trim(),
             location_code: this.DEFAULT_LOCATION, // Singapore (2702)
             language_code: 'en', // English
-            include_seed_keyword: true,
-            include_serp_info: true,
+            depth: 2, // Get related keywords with depth
             limit: 50, // Get top 50 related keywords per seed
+            filters: ["keyword_data.keyword_info.search_volume", ">", 0], // Only keywords with search volume
+            order_by: ["keyword_data.keyword_info.search_volume,desc"], // Sort by search volume
           },
         ];
 
-        console.log(`  Fetching suggestions for: "${keyword}" (Location Code: ${this.DEFAULT_LOCATION} - Singapore)`);
+        console.log(`  Fetching RELATED keywords for: "${keyword}" (Location: ${this.DEFAULT_LOCATION} - Singapore)`);
 
         const response = await this.axiosInstance.post<any>(
           this.apiUrl,
@@ -137,17 +138,19 @@ export class DataForSEOService {
           const items = task.result[0].items;
 
           items.forEach((item: any) => {
+            // Related Keywords API has keyword_data nested structure
+            const kwData = item.keyword_data || item;
             allKeywords.push({
-              keyword: item.keyword,
-              searchVolume: item.keyword_info?.search_volume || 0,
-              difficulty: item.keyword_properties?.keyword_difficulty || 50,
-              cpc: item.keyword_info?.cpc || 0,
-              competition: this.mapCompetition(item.keyword_info?.competition),
-              trend: item.keyword_info?.monthly_searches,
+              keyword: kwData.keyword || item.keyword,
+              searchVolume: kwData.keyword_info?.search_volume || 0,
+              difficulty: kwData.keyword_properties?.keyword_difficulty || 50,
+              cpc: kwData.keyword_info?.cpc || 0,
+              competition: this.mapCompetition(kwData.keyword_info?.competition),
+              trend: kwData.keyword_info?.monthly_searches,
             });
           });
 
-          console.log(`  ✅ Found ${items.length} keywords for "${keyword}"`);
+          console.log(`  ✅ Found ${items.length} related keywords for "${keyword}"`);
         } else {
           console.warn(`  ⚠️  No items in result for "${keyword}"`);
           console.warn(`  Result structure:`, JSON.stringify(task?.result, null, 2));
