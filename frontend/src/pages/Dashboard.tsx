@@ -7,12 +7,13 @@ import { Input } from '@/components/ui/input';
 export default function Dashboard() {
   const navigate = useNavigate();
   const [keywords, setKeywords] = useState('');
+  const [keywordLimit, setKeywordLimit] = useState<number>(50); // Default to 50
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (keywords.trim()) {
-      // Navigate to search results with keywords as query param
-      navigate(`/search?q=${encodeURIComponent(keywords.trim())}`);
+      // Navigate to search results with keywords and limit as query params
+      navigate(`/search?q=${encodeURIComponent(keywords.trim())}&limit=${keywordLimit}`);
     }
   };
 
@@ -39,6 +40,32 @@ export default function Dashboard() {
             className="h-14 pl-12 pr-4 text-lg rounded-full border-2 shadow-lg focus:shadow-xl transition-shadow"
           />
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+        </div>
+
+        {/* Keyword Limit Selector */}
+        <div className="flex justify-center gap-4 mt-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="limit"
+              value="50"
+              checked={keywordLimit === 50}
+              onChange={() => setKeywordLimit(50)}
+              className="w-4 h-4"
+            />
+            <span className="text-sm">50 keywords per seed</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="limit"
+              value="100"
+              checked={keywordLimit === 100}
+              onChange={() => setKeywordLimit(100)}
+              className="w-4 h-4"
+            />
+            <span className="text-sm">100 keywords per seed</span>
+          </label>
         </div>
 
         <div className="flex justify-center gap-3 mt-6">

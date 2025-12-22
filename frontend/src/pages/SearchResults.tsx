@@ -19,6 +19,7 @@ export default function SearchResults() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const keywords = searchParams.get('q') || '';
+  const keywordLimit = parseInt(searchParams.get('limit') || '50'); // Default to 50
   useApi();
 
   const [researchId, setResearchId] = useState<string | null>(null);
@@ -38,7 +39,9 @@ export default function SearchResults() {
       const researchResponse = await keywordResearchApi.create({
         projectId: project.id,
         seedKeywords: seedKeywords.split(',').map(k => k.trim()).filter(k => k),
-        targetLocation: 'United States',
+        targetLocation: 'Singapore',
+        keywordLimit: keywordLimit, // Pass the limit (50 or 100)
+        includePAA: true, // Always include PAA questions
       });
 
       return researchResponse.data.data;
@@ -200,6 +203,36 @@ export default function SearchResults() {
                 </div>
               </CardHeader>
               <CardContent>
+                {/* People Also Ask Questions */}
+                {cluster.peopleAlsoAsk && Array.isArray(cluster.peopleAlsoAsk) && cluster.peopleAlsoAsk.length > 0 && (
+                  <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
+                      <span className="text-blue-600">❓</span>
+                      People Also Ask
+                    </h4>
+                    <div className="space-y-2">
+                      {cluster.peopleAlsoAsk.map((paa: any, idx: number) => (
+                        <div key={idx} className="text-sm">
+                          <p className="font-medium text-blue-800 dark:text-blue-200">
+                            {paa.question}
+                          </p>
+                          {paa.url && (
+                            <a
+                              href={paa.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              View source →
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Keywords Table */}
                 {cluster.keywords && cluster.keywords.length > 0 ? (
                   <Table>
                     <TableHeader>
