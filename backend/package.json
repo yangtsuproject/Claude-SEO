@@ -27,7 +27,8 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "googleapis": "^144.0.0",
-    "ioredis": "^5.4.2"
+    "ioredis": "^5.4.2",
+    "svix": "^1.40.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
