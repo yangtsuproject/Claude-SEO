@@ -15,8 +15,11 @@ const PORT = process.env.PORT || 3001;
 /**
  * Middleware
  */
+// Remove trailing slash from FRONTEND_URL to match browser Origin header
+const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: frontendUrl,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -30,6 +33,8 @@ app.use(express.urlencoded({ extended: true }));
  */
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log(`Origin: ${req.headers.origin || 'none'}`);
+  console.log(`Auth: ${req.headers.authorization ? 'present' : 'missing'}`);
   next();
 });
 
@@ -80,6 +85,7 @@ app.listen(PORT, () => {
   console.log('═'.repeat(50));
   console.log(`📡 Server running on: http://localhost:${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔐 CORS origin: ${frontendUrl}`);
   console.log(`✅ Health check: http://localhost:${PORT}/health`);
   console.log('═'.repeat(50));
   console.log('\n📋 Available endpoints:');
