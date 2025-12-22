@@ -105,7 +105,7 @@ export default function Results() {
           <h2 className="text-3xl font-bold tracking-tight">Keyword Research Results</h2>
           <p className="text-muted-foreground">
             {research?.seedKeywords?.join(', ').slice(0, 100)}
-            {research?.seedKeywords?.join(', ').length > 100 && '...'}
+            {(research?.seedKeywords?.join(', ') || '').length > 100 && '...'}
           </p>
         </div>
         {research?.status === 'completed' && (
