@@ -1,202 +1,73 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FolderOpen, Calendar, Trash2 } from 'lucide-react';
-import { useApi, projectsApi, Project } from '@/lib/api';
+import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  useApi();
-  const queryClient = useQueryClient();
-  const [showNewProject, setShowNewProject] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectDomain, setNewProjectDomain] = useState('');
+  const [keywords, setKeywords] = useState('');
 
-  // Fetch all projects
-  const { data: projects, isLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: async () => {
-      const response = await projectsApi.getAll();
-      return response.data.data;
-    },
-  });
-
-  // Create project mutation
-  const createProjectMutation = useMutation({
-    mutationFn: async (data: { name: string; domain?: string }) => {
-      const response = await projectsApi.create(data);
-      return response.data.data;
-    },
-    onSuccess: (project) => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setShowNewProject(false);
-      setNewProjectName('');
-      setNewProjectDomain('');
-      navigate(`/projects/${project.id}`);
-    },
-  });
-
-  // Delete project mutation
-  const deleteProjectMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await projectsApi.delete(id);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-    },
-  });
-
-  const handleCreateProject = () => {
-    if (newProjectName.trim()) {
-      createProjectMutation.mutate({
-        name: newProjectName.trim(),
-        domain: newProjectDomain.trim() || undefined,
-      });
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (keywords.trim()) {
+      // Navigate to search results with keywords as query param
+      navigate(`/search?q=${encodeURIComponent(keywords.trim())}`);
     }
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
-          <p className="text-muted-foreground">
-            Manage your SEO keyword research projects
-          </p>
-        </div>
-        <Button onClick={() => setShowNewProject(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
-        </Button>
+    <div className="min-h-[80vh] flex flex-col items-center justify-center px-4">
+      {/* Logo/Title */}
+      <div className="text-center mb-8">
+        <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          SEO Keyword Research
+        </h1>
+        <p className="text-muted-foreground text-lg">
+          Discover high-value keywords for your content strategy
+        </p>
       </div>
 
-      {/* New Project Form */}
-      {showNewProject && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Project</CardTitle>
-            <CardDescription>Add a new SEO project to get started</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="project-name">Project Name *</Label>
-              <Input
-                id="project-name"
-                placeholder="e.g., Colorectal Surgery Singapore"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="project-domain">Domain (optional)</Label>
-              <Input
-                id="project-domain"
-                placeholder="e.g., example.com"
-                value={newProjectDomain}
-                onChange={(e) => setNewProjectDomain(e.target.value)}
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowNewProject(false);
-                setNewProjectName('');
-                setNewProjectDomain('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateProject}
-              disabled={!newProjectName.trim() || createProjectMutation.isPending}
-            >
-              {createProjectMutation.isPending ? 'Creating...' : 'Create Project'}
-            </Button>
-          </CardFooter>
-        </Card>
-      )}
+      {/* Search Box */}
+      <form onSubmit={handleSearch} className="w-full max-w-2xl">
+        <div className="relative">
+          <Input
+            type="text"
+            placeholder="Enter seed keywords (e.g., colorectal surgery Singapore)"
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            className="h-14 pl-12 pr-4 text-lg rounded-full border-2 shadow-lg focus:shadow-xl transition-shadow"
+          />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+        </div>
 
-      {/* Projects List */}
-      {isLoading ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Loading projects...</p>
+        <div className="flex justify-center gap-3 mt-6">
+          <Button
+            type="submit"
+            size="lg"
+            disabled={!keywords.trim()}
+            className="rounded-full px-8"
+          >
+            Search Keywords
+          </Button>
         </div>
-      ) : projects && projects.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project: Project) => (
-            <Card
-              key={project.id}
-              className="cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => navigate(`/projects/${project.id}`)}
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <FolderOpen className="h-8 w-8 text-primary" />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (
-                        confirm('Are you sure you want to delete this project?')
-                      ) {
-                        deleteProjectMutation.mutate(project.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-                <CardTitle className="mt-4">{project.name}</CardTitle>
-                <CardDescription>
-                  {project.domain || 'No domain specified'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  <span>
-                    {new Date(project.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="mt-2 text-sm">
-                  <span className="font-medium">
-                    {project._count?.keywordResearch || 0}
-                  </span>{' '}
-                  keyword research completed
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+      </form>
+
+      {/* Info Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 max-w-4xl w-full">
+        <div className="text-center p-6 rounded-lg border bg-card">
+          <div className="text-3xl font-bold text-primary mb-2">1000+</div>
+          <div className="text-sm text-muted-foreground">Keywords Analyzed</div>
         </div>
-      ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold">No projects yet</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Create your first project to get started with keyword research
-            </p>
-            <Button onClick={() => setShowNewProject(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Project
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+        <div className="text-center p-6 rounded-lg border bg-card">
+          <div className="text-3xl font-bold text-primary mb-2">AI-Powered</div>
+          <div className="text-sm text-muted-foreground">Smart Clustering</div>
+        </div>
+        <div className="text-center p-6 rounded-lg border bg-card">
+          <div className="text-3xl font-bold text-primary mb-2">Real-time</div>
+          <div className="text-sm text-muted-foreground">Search Volume Data</div>
+        </div>
+      </div>
     </div>
   );
 }

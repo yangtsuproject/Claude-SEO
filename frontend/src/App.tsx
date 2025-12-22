@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton } from '@clerk/clerk-react';
 import Dashboard from './pages/Dashboard';
+import SearchResults from './pages/SearchResults';
 import ProjectDetail from './pages/ProjectDetail';
 import KeywordResearch from './pages/KeywordResearch';
 import Results from './pages/Results';
@@ -24,6 +25,7 @@ function App() {
           <main className="container mx-auto px-4 py-8">
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/search" element={<SearchResults />} />
               <Route path="/projects/:projectId" element={<ProjectDetail />} />
               <Route
                 path="/projects/:projectId/keyword-research/new"
