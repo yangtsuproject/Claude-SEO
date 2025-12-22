@@ -12,7 +12,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "fix-migration": "ts-node scripts/fix-migration.ts"
   },
   "keywords": ["seo", "keyword-research"],
   "author": "",
@@ -30,13 +31,13 @@
     "ioredis": "^5.4.2",
     "prisma": "^6.1.0",
     "svix": "^1.40.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.7.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
-    "nodemon": "^3.1.9",
-    "ts-node": "^10.9.2"
+    "nodemon": "^3.1.9"
   }
 }
