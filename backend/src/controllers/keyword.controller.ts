@@ -18,7 +18,7 @@ const keywordService = new KeywordService();
 export async function createKeywordResearch(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId!;
-    const { projectId, seedKeywords, targetLocation } = req.body;
+    const { projectId, seedKeywords, targetLocation, keywordLimit, includePAA } = req.body;
 
     // Validation
     if (!projectId) {
@@ -68,7 +68,9 @@ export async function createKeywordResearch(req: AuthenticatedRequest, res: Resp
     await addKeywordResearchJob(
       keywordResearch.id,
       projectId,
-      keywordResearch.seedKeywords
+      keywordResearch.seedKeywords,
+      keywordLimit || 50, // Default to 50 keywords per seed
+      includePAA !== false // Default to true (include PAA questions)
     );
 
     console.log(`✅ Created keyword research job: ${keywordResearch.id}`);

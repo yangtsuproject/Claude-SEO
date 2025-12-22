@@ -77,6 +77,7 @@ model Cluster {
   subClusters       Cluster[]       @relation("ClusterHierarchy")
   keywordCount      Int             @default(0)
   searchIntent      String?
+  peopleAlsoAsk     Json?           @default("[]") // Array of PAA questions
   createdAt         DateTime        @default(now())
 
   @@index([keywordResearchId])

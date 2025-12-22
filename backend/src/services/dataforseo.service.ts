@@ -43,6 +43,15 @@ export interface KeywordData {
 }
 
 /**
+ * People Also Ask question structure
+ */
+export interface PeopleAlsoAskQuestion {
+  question: string;
+  answer?: string;
+  url?: string;
+}
+
+/**
  * DataForSEO Service
  * Handles all interactions with the DataForSEO Keywords Data API
  */
@@ -78,15 +87,20 @@ export class DataForSEOService {
    * @param keywords Array of seed keywords to analyze
    * @param location Target location (default: Singapore)
    * @param language Target language (default: English)
+   * @param limit Number of related keywords to fetch per seed (default: 50, max: 100)
    * @returns Array of keyword data with search volume, CPC, difficulty, etc.
    */
   async getKeywordData(
     keywords: string[],
     location: string = 'Singapore',
-    language: string = 'English'
+    language: string = 'English',
+    limit: number = 50
   ): Promise<KeywordData[]> {
     try {
-      console.log(`📊 Fetching keyword data for ${keywords.length} keywords from DataForSEO Labs API (Singapore only)...`);
+      // Ensure limit is within bounds
+      const keywordLimit = Math.min(Math.max(limit, 10), 100);
+
+      console.log(`📊 Fetching keyword data for ${keywords.length} keywords from DataForSEO Labs API (Singapore only, limit: ${keywordLimit})...`);
 
       // Process each keyword separately for better results
       const allKeywords: KeywordData[] = [];
@@ -98,13 +112,13 @@ export class DataForSEOService {
             location_code: this.DEFAULT_LOCATION, // Singapore (2702)
             language_code: 'en', // English
             depth: 2, // Get related keywords with depth
-            limit: 50, // Get top 50 related keywords per seed
+            limit: keywordLimit, // Configurable limit (10-100)
             filters: ["keyword_data.keyword_info.search_volume", ">", 0], // Only keywords with search volume
             order_by: ["keyword_data.keyword_info.search_volume,desc"], // Sort by search volume
           },
         ];
 
-        console.log(`  Fetching RELATED keywords for: "${keyword}" (Location: ${this.DEFAULT_LOCATION} - Singapore)`);
+        console.log(`  Fetching RELATED keywords for: "${keyword}" (Location: ${this.DEFAULT_LOCATION} - Singapore, Limit: ${keywordLimit})`);
 
         const response = await this.axiosInstance.post<any>(
           this.apiUrl,
@@ -281,5 +295,60 @@ export class DataForSEOService {
   async getSearchVolume(keyword: string, location: string = 'Singapore'): Promise<number> {
     const results = await this.getKeywordData([keyword], location);
     return results[0]?.searchVolume || 0;
+  }
+
+  /**
+   * Fetch People Also Ask questions for a keyword
+   * @param keyword The keyword to search for
+   * @returns Array of PAA questions
+   */
+  async getPeopleAlsoAsk(keyword: string): Promise<PeopleAlsoAskQuestion[]> {
+    try {
+      console.log(`❓ Fetching People Also Ask for: "${keyword}"...`);
+
+      const requestBody = [
+        {
+          keyword: keyword.trim(),
+          location_code: this.DEFAULT_LOCATION, // Singapore (2702)
+          language_code: 'en',
+          device: 'desktop',
+          os: 'windows',
+        },
+      ];
+
+      const response = await this.axiosInstance.post<any>(
+        'https://api.dataforseo.com/v3/serp/google/organic/live/advanced',
+        requestBody
+      );
+
+      const task = response.data?.tasks?.[0];
+
+      if (task?.status_code !== 20000) {
+        console.warn(`  ⚠️  PAA request failed: ${task?.status_message}`);
+        return [];
+      }
+
+      const items = task?.result?.[0]?.items || [];
+      const paaItems = items.filter((item: any) => item.type === 'people_also_ask');
+
+      const questions: PeopleAlsoAskQuestion[] = [];
+
+      paaItems.forEach((paaItem: any) => {
+        paaItem.items?.forEach((item: any) => {
+          questions.push({
+            question: item.title || item.question,
+            answer: item.answer,
+            url: item.url,
+          });
+        });
+      });
+
+      console.log(`  ✅ Found ${questions.length} PAA questions for "${keyword}"`);
+
+      return questions.slice(0, 10); // Limit to 10 most relevant questions
+    } catch (error) {
+      console.error(`  ❌ Error fetching PAA for "${keyword}":`, error);
+      return []; // Return empty array on error, don't fail the entire request
+    }
   }
 }

@@ -9,6 +9,8 @@ interface KeywordResearchJobData {
   keywordResearchId: string;
   projectId: string;
   seedKeywords: string[];
+  keywordLimit?: number; // Number of keywords to fetch per seed (10-100)
+  includePAA?: boolean; // Whether to include People Also Ask questions
 }
 
 /**
@@ -48,10 +50,12 @@ export const keywordResearchQueue = new Queue<KeywordResearchJobData>('keyword-r
 export const keywordResearchWorker = new Worker<KeywordResearchJobData>(
   'keyword-research',
   async (job: Job<KeywordResearchJobData>) => {
-    const { keywordResearchId, seedKeywords } = job.data;
+    const { keywordResearchId, seedKeywords, keywordLimit, includePAA } = job.data;
 
     console.log(`\n🔄 Processing job ${job.id} for keyword research ${keywordResearchId}`);
     console.log(`📋 Seed keywords: ${seedKeywords.join(', ')}`);
+    console.log(`🔢 Keyword limit: ${keywordLimit || 50} per seed`);
+    console.log(`❓ Include PAA: ${includePAA !== false ? 'Yes' : 'No'}`);
 
     const keywordService = new KeywordService();
 
@@ -60,7 +64,7 @@ export const keywordResearchWorker = new Worker<KeywordResearchJobData>(
       await job.updateProgress(10);
 
       // Process the keyword research
-      await keywordService.processKeywordResearch(keywordResearchId);
+      await keywordService.processKeywordResearch(keywordResearchId, keywordLimit || 50, includePAA !== false);
 
       // Update job progress to 100%
       await job.updateProgress(100);
@@ -116,7 +120,9 @@ keywordResearchWorker.on('progress', (job, progress) => {
 export async function addKeywordResearchJob(
   keywordResearchId: string,
   projectId: string,
-  seedKeywords: string[]
+  seedKeywords: string[],
+  keywordLimit: number = 50,
+  includePAA: boolean = true
 ): Promise<Job<KeywordResearchJobData>> {
   const job = await keywordResearchQueue.add(
     'process-keyword-research',
@@ -124,6 +130,8 @@ export async function addKeywordResearchJob(
       keywordResearchId,
       projectId,
       seedKeywords,
+      keywordLimit,
+      includePAA,
     },
     {
       jobId: keywordResearchId, // Use keyword research ID as job ID for idempotency
