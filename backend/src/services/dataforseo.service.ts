@@ -47,10 +47,12 @@ export interface KeywordData {
  * Handles all interactions with the DataForSEO Keywords Data API
  */
 export class DataForSEOService {
-  private apiUrl = 'https://api.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live';
+  // Using SERP API for organic keyword research
+  private apiUrl = 'https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_suggestions/live';
   private username: string;
   private password: string;
   private axiosInstance: AxiosInstance;
+  private readonly DEFAULT_LOCATION = 2702; // Singapore location code
 
   constructor() {
     this.username = process.env.DATAFORSEO_LOGIN || '';
@@ -84,63 +86,77 @@ export class DataForSEOService {
     language: string = 'English'
   ): Promise<KeywordData[]> {
     try {
-      const requestBody = [
-        {
-          keywords,
-          location_name: location,
-          language_name: language,
-          include_adult_keywords: false,
-          sort_by: 'search_volume',
-        },
-      ];
+      console.log(`📊 Fetching keyword data for ${keywords.length} keywords from DataForSEO Labs API (Singapore only)...`);
 
-      console.log(`📊 Fetching keyword data for ${keywords.length} keywords...`);
+      // Process each keyword separately for better results
+      const allKeywords: KeywordData[] = [];
 
-      const response = await this.axiosInstance.post<DataForSEOResponse>(
-        this.apiUrl,
-        requestBody
-      );
+      for (const keyword of keywords) {
+        const requestBody = [
+          {
+            keyword: keyword.trim(),
+            location_code: this.DEFAULT_LOCATION, // Singapore (2702)
+            language_code: 'en', // English
+            include_seed_keyword: true,
+            include_serp_info: true,
+            limit: 50, // Get top 50 related keywords per seed
+          },
+        ];
 
-      // Log the full response for debugging
-      console.log('DataForSEO Response:', JSON.stringify(response.data, null, 2));
+        console.log(`  Fetching suggestions for: "${keyword}"`);
 
-      if (!response.data?.tasks?.[0]?.result?.[0]?.keywords) {
-        const errorMsg = response.data?.tasks?.[0]?.status_message || 'Invalid response from DataForSEO API';
-        console.error('DataForSEO API Error:', errorMsg);
-        console.error('Full response:', response.data);
-        throw new Error(`DataForSEO API Error: ${errorMsg}`);
+        const response = await this.axiosInstance.post<any>(
+          this.apiUrl,
+          requestBody
+        );
+
+        console.log(`  Response status: ${response.data?.tasks?.[0]?.status_message || 'unknown'}`);
+
+        if (response.data?.tasks?.[0]?.result?.[0]?.items) {
+          const items = response.data.tasks[0].result[0].items;
+
+          items.forEach((item: any) => {
+            allKeywords.push({
+              keyword: item.keyword,
+              searchVolume: item.keyword_info?.search_volume || 0,
+              difficulty: item.keyword_properties?.keyword_difficulty || 50,
+              cpc: item.keyword_info?.cpc || 0,
+              competition: this.mapCompetition(item.keyword_info?.competition),
+              trend: item.keyword_info?.monthly_searches,
+            });
+          });
+
+          console.log(`  ✅ Found ${items.length} keywords for "${keyword}"`);
+        } else {
+          console.warn(`  ⚠️  No results for "${keyword}"`);
+        }
+
+        // Small delay between requests to avoid rate limiting
+        if (keywords.indexOf(keyword) < keywords.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
 
-      const rawKeywords = response.data.tasks[0].result[0].keywords;
+      // Remove duplicates and sort by search volume
+      const uniqueKeywords = Array.from(
+        new Map(allKeywords.map(kw => [kw.keyword.toLowerCase(), kw])).values()
+      );
+      uniqueKeywords.sort((a, b) => b.searchVolume - a.searchVolume);
 
-      // Normalize the data to our format
-      const normalizedKeywords: KeywordData[] = rawKeywords.map((kw) => ({
-        keyword: kw.keyword,
-        searchVolume: kw.search_volume || 0,
-        difficulty: this.calculateDifficulty(kw.competition_index, kw.competition),
-        cpc: kw.cpc || 0,
-        competition: kw.competition || 'UNKNOWN',
-        trend: kw.keyword_info?.monthly_searches,
-      }));
+      console.log(`✅ Total unique keywords fetched: ${uniqueKeywords.length}`);
 
-      console.log(`✅ Successfully fetched ${normalizedKeywords.length} keywords`);
+      if (uniqueKeywords.length === 0) {
+        throw new Error('No keyword data returned from DataForSEO API. Please check your credits and try again.');
+      }
 
-      return normalizedKeywords;
+      return uniqueKeywords;
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const errorData = error.response?.data;
-        console.error('DataForSEO API Error:', errorData || error.message);
-
-        // Check if it's a credit/auth error - use demo mode
-        if (error.response?.status === 401 || error.response?.status === 402 ||
-            (errorData && typeof errorData === 'object' && 'status_message' in errorData &&
-             (errorData.status_message?.includes('credit') || errorData.status_message?.includes('authorized')))) {
-          console.log('⚠️  DataForSEO credits exhausted - using DEMO MODE with sample data');
-          return this.generateDemoData(keywords);
-        }
+        console.error('❌ DataForSEO API Error:', errorData || error.message);
 
         throw new Error(
-          `DataForSEO API Error: ${error.response?.data?.status_message || error.message}`
+          `DataForSEO API Error: ${errorData?.status_message || error.message}`
         );
       }
       throw error;
@@ -148,50 +164,13 @@ export class DataForSEOService {
   }
 
   /**
-   * Generate demo/sample keyword data
-   * Used when DataForSEO API is unavailable (no credits, etc.)
+   * Map competition value to string
    */
-  private generateDemoData(keywords: string[]): KeywordData[] {
-    console.log('🎭 Generating demo data for UI testing...');
-
-    const demoKeywords: KeywordData[] = [];
-    const competitions = ['LOW', 'MEDIUM', 'HIGH'];
-
-    keywords.forEach(baseKeyword => {
-      // Generate 10-15 related keywords per seed keyword
-      const variations = [
-        baseKeyword,
-        `${baseKeyword} near me`,
-        `${baseKeyword} cost`,
-        `${baseKeyword} reviews`,
-        `best ${baseKeyword}`,
-        `${baseKeyword} specialist`,
-        `affordable ${baseKeyword}`,
-        `${baseKeyword} procedure`,
-        `${baseKeyword} treatment`,
-        `${baseKeyword} doctor`,
-        `${baseKeyword} clinic`,
-        `${baseKeyword} surgery`,
-        `how much is ${baseKeyword}`,
-        `${baseKeyword} recovery time`,
-      ];
-
-      variations.forEach(kw => {
-        demoKeywords.push({
-          keyword: kw,
-          searchVolume: Math.floor(Math.random() * 5000) + 100,
-          difficulty: Math.floor(Math.random() * 100),
-          cpc: parseFloat((Math.random() * 10 + 0.5).toFixed(2)),
-          competition: competitions[Math.floor(Math.random() * competitions.length)],
-        });
-      });
-    });
-
-    // Sort by search volume descending
-    demoKeywords.sort((a, b) => b.searchVolume - a.searchVolume);
-
-    console.log(`✅ Generated ${demoKeywords.length} demo keywords`);
-    return demoKeywords;
+  private mapCompetition(competition?: number): string {
+    if (competition === undefined || competition === null) return 'MEDIUM';
+    if (competition < 0.33) return 'LOW';
+    if (competition < 0.66) return 'MEDIUM';
+    return 'HIGH';
   }
 
   /**
