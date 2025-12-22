@@ -28,6 +28,7 @@ export async function authenticateUser(
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No auth header or invalid format');
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'No authentication token provided',
@@ -35,6 +36,7 @@ export async function authenticateUser(
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    console.log(`🔐 Verifying token for request to ${req.path}`);
 
     // Verify the JWT token with Clerk
     const payload = await verifyToken(token, {
@@ -42,11 +44,14 @@ export async function authenticateUser(
     });
 
     if (!payload || !payload.sub) {
+      console.log('❌ Token verification failed - invalid payload');
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid or expired token',
       });
     }
+
+    console.log(`✅ Token verified for user: ${payload.sub}`);
 
     // Get user from Clerk using the user ID from the token
     const clerkUser = await clerkClient.users.getUser(payload.sub);
@@ -94,11 +99,17 @@ export async function authenticateUser(
     };
 
     next();
-  } catch (error) {
-    console.error('Authentication error:', error);
+  } catch (error: any) {
+    console.error('❌ Authentication error:', error?.message || error);
+    console.error('Error details:', {
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack?.split('\n').slice(0, 3).join('\n'),
+    });
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Authentication failed',
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined,
     });
   }
 }
