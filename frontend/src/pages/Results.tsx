@@ -19,8 +19,9 @@ export default function Results() {
       return response.data.data;
     },
     enabled: !!researchId,
-    refetchInterval: (data) => {
-      return data?.data?.status === 'processing' || data?.data?.status === 'pending'
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return data?.status === 'processing' || data?.status === 'pending'
         ? 5000
         : false;
     },
