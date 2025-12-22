@@ -52,7 +52,7 @@ export class DataForSEOService {
   private username: string;
   private password: string;
   private axiosInstance: AxiosInstance;
-  private readonly DEFAULT_LOCATION = 'Singapore'; // Singapore location name
+  private readonly DEFAULT_LOCATION = 2702; // Singapore location code (verified)
 
   constructor() {
     this.username = process.env.DATAFORSEO_LOGIN || '';
@@ -95,7 +95,7 @@ export class DataForSEOService {
         const requestBody = [
           {
             keyword: keyword.trim(),
-            location_name: this.DEFAULT_LOCATION, // Singapore
+            location_code: this.DEFAULT_LOCATION, // Singapore (2702)
             language_code: 'en', // English
             include_seed_keyword: true,
             include_serp_info: true,
@@ -103,7 +103,7 @@ export class DataForSEOService {
           },
         ];
 
-        console.log(`  Fetching suggestions for: "${keyword}" (Location: ${this.DEFAULT_LOCATION})`);
+        console.log(`  Fetching suggestions for: "${keyword}" (Location Code: ${this.DEFAULT_LOCATION} - Singapore)`);
 
         const response = await this.axiosInstance.post<any>(
           this.apiUrl,
@@ -121,6 +121,11 @@ export class DataForSEOService {
 
         const task = response.data.tasks[0];
         console.log(`  Task status: ${task?.status_code} - ${task?.status_message}`);
+
+        // Log the location that was actually used
+        if (task?.result?.[0]) {
+          console.log(`  Location used: ${task.result[0].location_code} - ${task.result[0].location_name || 'unknown'}`);
+        }
 
         // Check if task succeeded
         if (task?.status_code !== 20000) {
