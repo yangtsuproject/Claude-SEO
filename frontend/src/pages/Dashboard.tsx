@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const api = useApi();
+  useApi();
   const queryClient = useQueryClient();
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');

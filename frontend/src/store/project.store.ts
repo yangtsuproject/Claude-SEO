@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Project, KeywordResearch } from '../lib/api';
+import type { Project, KeywordResearch } from '../lib/api';
 
 /**
  * Project Store
