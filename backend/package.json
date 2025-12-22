@@ -13,7 +13,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "fix-migration": "ts-node scripts/fix-migration.ts"
+    "fix-migration": "node scripts/fix-migration.js"
   },
   "keywords": ["seo", "keyword-research"],
   "author": "",
