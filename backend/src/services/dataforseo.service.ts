@@ -52,7 +52,7 @@ export class DataForSEOService {
   private username: string;
   private password: string;
   private axiosInstance: AxiosInstance;
-  private readonly DEFAULT_LOCATION = 2702; // Singapore location code
+  private readonly DEFAULT_LOCATION = 'Singapore'; // Singapore location name
 
   constructor() {
     this.username = process.env.DATAFORSEO_LOGIN || '';
@@ -95,7 +95,7 @@ export class DataForSEOService {
         const requestBody = [
           {
             keyword: keyword.trim(),
-            location_code: this.DEFAULT_LOCATION, // Singapore (2702)
+            location_name: this.DEFAULT_LOCATION, // Singapore
             language_code: 'en', // English
             include_seed_keyword: true,
             include_serp_info: true,
@@ -103,7 +103,7 @@ export class DataForSEOService {
           },
         ];
 
-        console.log(`  Fetching suggestions for: "${keyword}"`);
+        console.log(`  Fetching suggestions for: "${keyword}" (Location: ${this.DEFAULT_LOCATION})`);
 
         const response = await this.axiosInstance.post<any>(
           this.apiUrl,
