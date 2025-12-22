@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { clerkClient } from '@clerk/clerk-sdk-node';
+import { clerkClient, verifyToken } from '@clerk/clerk-sdk-node';
 import { prisma } from '../utils/prisma';
 
 /**
@@ -36,18 +36,20 @@ export async function authenticateUser(
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Verify the token with Clerk
-    const session = await clerkClient.sessions.verifySession(token, token);
+    // Verify the JWT token with Clerk
+    const payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY,
+    });
 
-    if (!session) {
+    if (!payload || !payload.sub) {
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid or expired token',
       });
     }
 
-    // Get user from Clerk
-    const clerkUser = await clerkClient.users.getUser(session.userId);
+    // Get user from Clerk using the user ID from the token
+    const clerkUser = await clerkClient.users.getUser(payload.sub);
 
     if (!clerkUser) {
       return res.status(401).json({
