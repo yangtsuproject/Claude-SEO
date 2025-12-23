@@ -97,6 +97,11 @@ export interface Cluster {
   subClusters?: Cluster[];
   keywords?: Keyword[];
   keywordCount: number;
+  peopleAlsoAsk?: Array<{
+    question: string;
+    url?: string;
+    xpath?: string;
+  }>;
   createdAt: string;
 }
 
@@ -118,7 +123,13 @@ export const projectsApi = {
 
 // Keyword Research
 export const keywordResearchApi = {
-  create: (data: { projectId: string; seedKeywords: string[]; targetLocation?: string }) =>
+  create: (data: {
+    projectId: string;
+    seedKeywords: string[];
+    targetLocation?: string;
+    keywordLimit?: number;
+    includePAA?: boolean;
+  }) =>
     api.post<{ success: boolean; data: KeywordResearch }>('/keyword-research', data),
   getById: (id: string) =>
     api.get<{ success: boolean; data: KeywordResearch }>(`/keyword-research/${id}`),
