@@ -37,7 +37,8 @@ async function fixFailedMigration() {
 
     console.log(`✅ Deleted ${deleteResult.rowCount} migration record(s)`);
 
-    // Step 2: Check if peopleAlsoAsk column exists
+    // Step 3: Check if peopleAlsoAsk column exists
+    console.log('🔍 Checking if peopleAlsoAsk column exists...');
     const columnCheck = await client.query(`
       SELECT column_name
       FROM information_schema.columns
@@ -54,24 +55,8 @@ async function fixFailedMigration() {
       console.log('✅ peopleAlsoAsk column already exists');
     }
 
-    // Step 4: Mark the new migration as applied
-    await client.query(`
-      INSERT INTO "_prisma_migrations" (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
-      VALUES (
-        gen_random_uuid(),
-        'manual_fix',
-        NOW(),
-        '20251222135200_add_people_also_ask',
-        NULL,
-        NULL,
-        NOW(),
-        1
-      )
-      ON CONFLICT (migration_name) DO NOTHING;
-    `);
-
-    console.log('✅ Marked new migration as applied');
     console.log('🎉 Migration fix completed successfully!');
+    console.log('✅ Failed migration deleted, column verified, Prisma can now proceed');
     process.exit(0);
 
   } catch (error) {
