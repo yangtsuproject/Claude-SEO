@@ -56,8 +56,8 @@ export interface PeopleAlsoAskQuestion {
  * Handles all interactions with the DataForSEO Keywords Data API
  */
 export class DataForSEOService {
-  // Using DataForSEO Labs Related Keywords API (properly respects location)
-  private apiUrl = 'https://api.dataforseo.com/v3/dataforseo_labs/google/related_keywords/live';
+  // Using DataForSEO Labs Keyword Ideas API (better coverage than Related Keywords)
+  private apiUrl = 'https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_ideas/live';
   private username: string;
   private password: string;
   private axiosInstance: AxiosInstance;
@@ -108,15 +108,13 @@ export class DataForSEOService {
       for (const keyword of keywords) {
         const requestBody = [
           {
-            keyword: keyword.trim(),
+            keywords: [keyword.trim()], // Keyword Ideas API takes array
             location_code: this.DEFAULT_LOCATION, // Singapore (2702)
             language_code: 'en', // English
-            depth: 4, // Increased depth for more semantic variations
+            include_adult_keywords: false,
             limit: keywordLimit, // Configurable limit (10-100)
-            include_seed_keyword: true, // Include the original keyword
-            include_serp_info: false, // Don't need SERP data
-            filters: ["keyword_data.keyword_info.search_volume", ">", 0], // Only keywords with search volume
-            order_by: ["keyword_data.keyword_info.search_volume,desc"], // Sort by search volume
+            filters: ["keyword_info.search_volume", ">", 0], // Only keywords with search volume
+            order_by: ["keyword_info.search_volume,desc"], // Sort by search volume
           },
         ];
 
@@ -136,15 +134,14 @@ export class DataForSEOService {
           const items = task.result[0].items;
 
           items.forEach((item: any) => {
-            // Related Keywords API has keyword_data nested structure
-            const kwData = item.keyword_data || item;
+            // Keyword Ideas API has direct structure (no keyword_data nesting)
             allKeywords.push({
-              keyword: kwData.keyword || item.keyword,
-              searchVolume: kwData.keyword_info?.search_volume || 0,
-              difficulty: kwData.keyword_properties?.keyword_difficulty || 50,
-              cpc: kwData.keyword_info?.cpc || 0,
-              competition: this.mapCompetition(kwData.keyword_info?.competition),
-              trend: kwData.keyword_info?.monthly_searches,
+              keyword: item.keyword,
+              searchVolume: item.keyword_info?.search_volume || 0,
+              difficulty: item.keyword_properties?.keyword_difficulty || 50,
+              cpc: item.keyword_info?.cpc || 0,
+              competition: this.mapCompetition(item.keyword_info?.competition),
+              trend: item.keyword_info?.monthly_searches,
             });
           });
 
