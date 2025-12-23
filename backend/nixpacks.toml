@@ -1,4 +1,5 @@
 # Nixpacks configuration for Railway
+# Force rebuild - updated Dec 23, 2025
 [phases.setup]
 nixPkgs = ["nodejs_20", "openssl"]
 
