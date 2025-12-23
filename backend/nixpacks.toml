@@ -6,7 +6,7 @@ nixPkgs = ["nodejs_20", "openssl"]
 cmds = ["npm install"]
 
 [phases.build]
-cmds = ["npx prisma generate", "npm run build", "node scripts/fix-migration.js || true"]
+cmds = ["npx prisma generate", "npm run build"]
 
 [start]
-cmd = "npx prisma migrate resolve --applied 20251222000000_init && npx prisma migrate deploy && node dist/index.js"
+cmd = "npx prisma migrate resolve --rolled-back 20251222120000_add_people_also_ask || true && npx prisma migrate resolve --applied 20251222000000_init && npx prisma migrate deploy && node dist/index.js"
