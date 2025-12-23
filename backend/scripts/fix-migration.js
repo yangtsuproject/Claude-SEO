@@ -1,3 +1,8 @@
+// Log immediately to verify script is running
+console.log('='.repeat(60));
+console.log('MIGRATION FIX SCRIPT STARTED');
+console.log('='.repeat(60));
+
 const { Client } = require('pg');
 require('dotenv').config();
 
