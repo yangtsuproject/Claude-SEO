@@ -83,7 +83,39 @@ export class DataForSEOService {
   }
 
   /**
-   * Fetch keyword data from DataForSEO API
+   * Fetch keyword suggestions from Google Autocomplete
+   * This gives us what people actually search for (like SE Ranking)
+   */
+  private async getAutocompleteSuggestions(keyword: string): Promise<string[]> {
+    try {
+      const requestBody = [{
+        keyword: keyword.trim(),
+        location_code: this.DEFAULT_LOCATION,
+        language_code: 'en',
+      }];
+
+      const response = await this.axiosInstance.post(
+        'https://api.dataforseo.com/v3/serp/google/autocomplete/live',
+        requestBody
+      );
+
+      const task = response.data?.tasks?.[0];
+      if (task?.status_code === 20000 && task?.result?.[0]?.items) {
+        return task.result[0].items
+          .map((item: any) => item.keyword)
+          .filter((kw: string) => kw && kw.length > 0);
+      }
+
+      return [];
+    } catch (error) {
+      console.error(`Autocomplete failed for "${keyword}":`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch keyword data from DataForSEO API using multi-source approach
+   * Combines autocomplete + related searches for comprehensive coverage
    * @param keywords Array of seed keywords to analyze
    * @param location Target location (default: Singapore)
    * @param language Target language (default: English)
@@ -97,76 +129,82 @@ export class DataForSEOService {
     limit: number = 50
   ): Promise<KeywordData[]> {
     try {
-      // Ensure limit is within bounds
-      const keywordLimit = Math.min(Math.max(limit, 10), 100);
+      console.log(`📊 Fetching comprehensive keyword data (multi-source approach)...`);
 
-      console.log(`📊 Fetching keyword data for ${keywords.length} keywords (limit: ${keywordLimit}/seed)...`);
+      const allSuggestions = new Set<string>();
 
-      // Process each keyword separately for better results
-      const allKeywords: KeywordData[] = [];
-
+      // Step 1: Get autocomplete suggestions for each seed keyword
       for (const keyword of keywords) {
-        const requestBody = [
-          {
-            keywords: [keyword.trim()], // Keyword Ideas API takes array
-            location_code: this.DEFAULT_LOCATION, // Singapore (2702)
-            language_code: 'en', // English
-            include_adult_keywords: false,
-            limit: keywordLimit, // Configurable limit (10-100)
-            filters: ["keyword_info.search_volume", ">", 0], // Only keywords with search volume
-            order_by: ["keyword_info.search_volume,desc"], // Sort by search volume
-          },
-        ];
+        console.log(`  🔍 Getting autocomplete for "${keyword}"...`);
 
-        const response = await this.axiosInstance.post<any>(
-          this.apiUrl,
+        // Add the seed keyword itself
+        allSuggestions.add(keyword.trim().toLowerCase());
+
+        // Get autocomplete suggestions
+        const suggestions = await this.getAutocompleteSuggestions(keyword);
+        suggestions.forEach(s => allSuggestions.add(s.toLowerCase()));
+
+        console.log(`    ✓ Found ${suggestions.length} autocomplete suggestions`);
+
+        // Small delay to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      console.log(`  📝 Total unique keyword suggestions: ${allSuggestions.size}`);
+
+      // Step 2: Get metrics for all suggestions (in batches)
+      const suggestionsArray = Array.from(allSuggestions);
+      const allKeywords: KeywordData[] = [];
+      const batchSize = 100; // DataForSEO allows up to 100 keywords per request
+
+      for (let i = 0; i < suggestionsArray.length; i += batchSize) {
+        const batch = suggestionsArray.slice(i, i + batchSize);
+
+        console.log(`  📊 Fetching metrics for batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(suggestionsArray.length / batchSize)} (${batch.length} keywords)...`);
+
+        const requestBody = [{
+          keywords: batch,
+          location_code: this.DEFAULT_LOCATION,
+          language_code: 'en',
+        }];
+
+        const response = await this.axiosInstance.post(
+          'https://api.dataforseo.com/v3/dataforseo_labs/google/bulk_keyword_difficulty/live',
           requestBody
         );
 
-        // Check if task succeeded
         const task = response.data?.tasks?.[0];
-        if (task?.status_code !== 20000) {
-          console.error(`Task failed for "${keyword}": ${task?.status_message}`);
-          continue;
-        }
-
-        if (task?.result?.[0]?.items && Array.isArray(task.result[0].items)) {
-          const items = task.result[0].items;
-
-          items.forEach((item: any) => {
-            // Keyword Ideas API has direct structure (no keyword_data nesting)
-            allKeywords.push({
-              keyword: item.keyword,
-              searchVolume: item.keyword_info?.search_volume || 0,
-              difficulty: item.keyword_properties?.keyword_difficulty || 50,
-              cpc: item.keyword_info?.cpc || 0,
-              competition: this.mapCompetition(item.keyword_info?.competition),
-              trend: item.keyword_info?.monthly_searches,
-            });
+        if (task?.status_code === 20000 && task?.result?.[0]?.items) {
+          task.result[0].items.forEach((item: any) => {
+            if (item.keyword_info?.search_volume > 0) {
+              allKeywords.push({
+                keyword: item.keyword,
+                searchVolume: item.keyword_info.search_volume,
+                difficulty: item.keyword_properties?.keyword_difficulty || 50,
+                cpc: item.keyword_info.cpc || 0,
+                competition: this.mapCompetition(item.keyword_info.competition),
+                trend: item.keyword_info.monthly_searches,
+              });
+            }
           });
-
-          console.log(`  ✅ ${items.length} keywords for "${keyword}"`);
         }
 
-        // Small delay between requests to avoid rate limiting
-        if (keywords.indexOf(keyword) < keywords.length - 1) {
+        // Delay between batches
+        if (i + batchSize < suggestionsArray.length) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
 
-      // Remove duplicates and sort by search volume
-      const uniqueKeywords = Array.from(
-        new Map(allKeywords.map(kw => [kw.keyword.toLowerCase(), kw])).values()
-      );
-      uniqueKeywords.sort((a, b) => b.searchVolume - a.searchVolume);
+      // Sort by search volume
+      allKeywords.sort((a, b) => b.searchVolume - a.searchVolume);
 
-      console.log(`✅ Total unique keywords fetched: ${uniqueKeywords.length}`);
+      console.log(`✅ Total keywords with data: ${allKeywords.length}`);
 
-      if (uniqueKeywords.length === 0) {
-        throw new Error('No keyword data returned from DataForSEO Labs API. This could mean: 1) No credits available, 2) DataForSEO Labs not enabled on your account, or 3) Keywords not found. Check Railway logs for details.');
+      if (allKeywords.length === 0) {
+        throw new Error('No keyword data returned. Check DataForSEO credits and API access.');
       }
 
-      return uniqueKeywords;
+      return allKeywords;
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const errorData = error.response?.data;
