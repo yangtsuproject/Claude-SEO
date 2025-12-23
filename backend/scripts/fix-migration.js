@@ -2,23 +2,37 @@ const { Client } = require('pg');
 require('dotenv').config();
 
 async function fixFailedMigration() {
+  console.log('🚀 Starting migration fix script...');
+  console.log('📍 DATABASE_URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
+
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
   });
 
   try {
+    console.log('🔌 Connecting to database...');
     await client.connect();
-    console.log('🔧 Connected to database, fixing failed migration...');
+    console.log('✅ Connected to database successfully');
 
-    // Step 1: Mark the failed migration as rolled back
-    await client.query(`
+    // Step 1: Check current migration status
+    console.log('📋 Checking current migration status...');
+    const currentStatus = await client.query(`
+      SELECT migration_name, finished_at, rolled_back_at
+      FROM "_prisma_migrations"
+      WHERE migration_name = '20251222120000_add_people_also_ask';
+    `);
+    console.log('Current status:', currentStatus.rows);
+
+    // Step 2: Mark the failed migration as rolled back
+    console.log('🔄 Marking failed migration as rolled back...');
+    const updateResult = await client.query(`
       UPDATE "_prisma_migrations"
       SET rolled_back_at = NOW()
       WHERE migration_name = '20251222120000_add_people_also_ask'
       AND finished_at IS NULL;
     `);
 
-    console.log('✅ Marked failed migration as rolled back');
+    console.log(`✅ Updated ${updateResult.rowCount} migration record(s)`);
 
     // Step 2: Check if peopleAlsoAsk column exists
     const columnCheck = await client.query(`

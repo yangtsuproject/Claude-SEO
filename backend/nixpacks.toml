@@ -9,4 +9,4 @@ cmds = ["npm install"]
 cmds = ["npx prisma generate", "npm run build"]
 
 [start]
-cmd = "bash startup.sh"
+cmd = "npm run start:production"
