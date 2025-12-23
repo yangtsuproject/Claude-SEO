@@ -95,20 +95,26 @@ export class DataForSEOService {
       }];
 
       const response = await this.axiosInstance.post(
-        'https://api.dataforseo.com/v3/serp/google/autocomplete/live',
+        'https://api.dataforseo.com/v3/serp/google/autocomplete/live/advanced',
         requestBody
       );
 
       const task = response.data?.tasks?.[0];
+      console.log(`    📋 Autocomplete API - status: ${task?.status_code}, items: ${task?.result?.[0]?.items?.length || 0}`);
+
       if (task?.status_code === 20000 && task?.result?.[0]?.items) {
         return task.result[0].items
           .map((item: any) => item.keyword)
           .filter((kw: string) => kw && kw.length > 0);
       }
 
+      if (task?.status_code !== 20000) {
+        console.warn(`    ⚠️  Autocomplete failed: ${task?.status_message}`);
+      }
+
       return [];
-    } catch (error) {
-      console.error(`Autocomplete failed for "${keyword}":`, error);
+    } catch (error: any) {
+      console.error(`    ❌ Autocomplete error for "${keyword}": ${error?.response?.status} ${error?.response?.statusText}`);
       return [];
     }
   }
