@@ -6,7 +6,11 @@ nixPkgs = ["nodejs_20", "openssl"]
 cmds = ["npm install"]
 
 [phases.build]
-cmds = ["npx prisma generate", "npm run build"]
+cmds = [
+  "npx prisma generate",
+  "npm run build",
+  "echo '=== RUNNING MIGRATION FIX IN BUILD PHASE ===' && node scripts/fix-migration.js || echo 'Fix script failed but continuing'"
+]
 
 [start]
-cmd = "node scripts/fix-migration.js && npx prisma migrate deploy && node dist/index.js"
+cmd = "npx prisma migrate deploy && node dist/index.js"
