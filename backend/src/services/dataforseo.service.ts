@@ -143,44 +143,23 @@ export class DataForSEOService {
     limit: number = 50
   ): Promise<KeywordData[]> {
     try {
-      console.log(`📊 Fetching comprehensive keyword data (autocomplete + keyword ideas)...`);
+      console.log(`📊 Fetching keyword data (related concepts → autocomplete variations)...`);
 
-      const allKeywordSeeds = new Set<string>();
-
-      // Step 1: Get autocomplete suggestions for each seed keyword
-      for (const keyword of keywords) {
-        console.log(`  🔍 Getting autocomplete for "${keyword}"...`);
-
-        // Add the seed keyword itself
-        allKeywordSeeds.add(keyword.trim().toLowerCase());
-
-        // Get autocomplete suggestions
-        const suggestions = await this.getAutocompleteSuggestions(keyword);
-        suggestions.forEach(s => allKeywordSeeds.add(s.toLowerCase()));
-
-        console.log(`    ✓ Found ${suggestions.length} autocomplete suggestions`);
-
-        // Small delay to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-
-      console.log(`  📝 Total autocomplete seeds: ${allKeywordSeeds.size}`);
-
-      // Step 2: Use Keyword Ideas API to expand each autocomplete suggestion
       const allKeywords: KeywordData[] = [];
-      const seedsArray = Array.from(allKeywordSeeds).slice(0, 5); // Limit to first 5 seeds to avoid too many API calls
+      const relatedConcepts = new Set<string>();
 
-      for (const seed of seedsArray) {
-        console.log(`  🔎 Getting keyword ideas for "${seed}"...`);
+      // Step 1: Find RELATED CONCEPTS using Keyword Ideas API
+      for (const keyword of keywords) {
+        console.log(`  🔍 Finding related concepts for "${keyword}"...`);
 
         const requestBody = [{
-          keywords: [seed],
+          keywords: [keyword.trim()],
           location_code: this.DEFAULT_LOCATION,
           language_code: 'en',
           include_seed_keyword: true,
-          limit: Math.min(limit, 50), // Limit per seed
+          limit: 20, // Get top 20 related concepts
           filters: [
-            ['keyword_info.search_volume', '>', 0], // Only keywords with volume
+            ['keyword_info.search_volume', '>=', 10], // Minimum 10 search volume
           ],
           order_by: ['keyword_info.search_volume,desc'],
         }];
@@ -193,10 +172,16 @@ export class DataForSEOService {
         const task = response.data?.tasks?.[0];
         if (task?.status_code === 20000 && task?.result?.[0]?.items) {
           const items = task.result[0].items;
-          console.log(`    ✓ Found ${items.length} keyword ideas for "${seed}"`);
+          console.log(`    ✓ Found ${items.length} related concepts`);
 
+          // Add top related concepts to our set
+          items.slice(0, 10).forEach((item: any) => {
+            relatedConcepts.add(item.keyword);
+          });
+
+          // Also add these keywords directly to results
           items.forEach((item: any) => {
-            if (item.keyword_info?.search_volume > 0) {
+            if (item.keyword_info?.search_volume >= 10) {
               allKeywords.push({
                 keyword: item.keyword,
                 searchVolume: item.keyword_info.search_volume,
@@ -208,30 +193,72 @@ export class DataForSEOService {
             }
           });
         } else {
-          console.log(`    ⚠️  No keyword ideas for "${seed}". Status: ${task?.status_code}`);
+          console.log(`    ⚠️  No related concepts found. Status: ${task?.status_code}`);
         }
 
-        // Delay between requests
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      console.log(`  📝 Total keywords from Keyword Ideas API: ${allKeywords.length}`);
+      console.log(`  📝 Total related concepts: ${relatedConcepts.size}`);
+      console.log(`  📝 Keywords from related concepts: ${allKeywords.length}`);
+
+      // Step 2: Get autocomplete variations for top related concepts
+      const topConcepts = Array.from(relatedConcepts).slice(0, 5); // Limit to top 5 to save credits
+
+      for (const concept of topConcepts) {
+        console.log(`  🔎 Getting autocomplete variations for "${concept}"...`);
+
+        const suggestions = await this.getAutocompleteSuggestions(concept);
+        console.log(`    ✓ Found ${suggestions.length} autocomplete variations`);
+
+        // Get metrics for autocomplete suggestions (in one batch)
+        if (suggestions.length > 0) {
+          const requestBody = [{
+            keywords: suggestions,
+            location_code: this.DEFAULT_LOCATION,
+            language_code: 'en',
+          }];
+
+          const response = await this.axiosInstance.post(
+            'https://api.dataforseo.com/v3/dataforseo_labs/google/historical_search_volume/live',
+            requestBody
+          );
+
+          const task = response.data?.tasks?.[0];
+          if (task?.status_code === 20000 && task?.result?.[0]?.items) {
+            task.result[0].items.forEach((item: any) => {
+              if (item.keyword_info?.search_volume >= 10) {
+                allKeywords.push({
+                  keyword: item.keyword,
+                  searchVolume: item.keyword_info.search_volume,
+                  difficulty: item.keyword_properties?.keyword_difficulty || 50,
+                  cpc: item.keyword_info?.cpc || 0,
+                  competition: this.mapCompetition(item.keyword_info?.competition),
+                  trend: item.keyword_info?.monthly_searches,
+                });
+              }
+            });
+          }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      console.log(`  📝 Total keywords after autocomplete: ${allKeywords.length}`);
 
       // Step 3: If Singapore didn't return enough keywords, try US location
-      if (allKeywords.length < 10 && seedsArray.length > 0) {
-        console.log(`  ⚠️  Only ${allKeywords.length} keywords from Singapore. Trying US location for more coverage...`);
+      if (allKeywords.length < 20) {
+        console.log(`  ⚠️  Only ${allKeywords.length} keywords. Trying US location...`);
 
-        for (const seed of seedsArray.slice(0, 3)) { // Try first 3 seeds with US location
-          console.log(`  🔎 Getting US keyword ideas for "${seed}"...`);
-
+        for (const keyword of keywords) {
           const requestBody = [{
-            keywords: [seed],
-            location_code: this.FALLBACK_LOCATION, // US location
+            keywords: [keyword.trim()],
+            location_code: this.FALLBACK_LOCATION,
             language_code: 'en',
             include_seed_keyword: true,
-            limit: Math.min(limit, 50),
+            limit: 30,
             filters: [
-              ['keyword_info.search_volume', '>', 0],
+              ['keyword_info.search_volume', '>=', 10],
             ],
             order_by: ['keyword_info.search_volume,desc'],
           }];
@@ -243,11 +270,8 @@ export class DataForSEOService {
 
           const task = response.data?.tasks?.[0];
           if (task?.status_code === 20000 && task?.result?.[0]?.items) {
-            const items = task.result[0].items;
-            console.log(`    ✓ Found ${items.length} US keyword ideas for "${seed}"`);
-
-            items.forEach((item: any) => {
-              if (item.keyword_info?.search_volume > 0) {
+            task.result[0].items.forEach((item: any) => {
+              if (item.keyword_info?.search_volume >= 10) {
                 allKeywords.push({
                   keyword: item.keyword,
                   searchVolume: item.keyword_info.search_volume,
@@ -263,7 +287,7 @@ export class DataForSEOService {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        console.log(`  ✅ Total keywords after US fallback: ${allKeywords.length}`);
+        console.log(`  ✅ Total after US fallback: ${allKeywords.length}`);
       }
 
       // Remove duplicates and sort by search volume
