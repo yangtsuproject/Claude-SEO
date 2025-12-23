@@ -168,25 +168,40 @@ export class DataForSEOService {
           language_code: 'en',
         }];
 
+        // Use Historical Search Volume endpoint (better data availability)
         const response = await this.axiosInstance.post(
-          'https://api.dataforseo.com/v3/dataforseo_labs/google/bulk_keyword_difficulty/live',
+          'https://api.dataforseo.com/v3/dataforseo_labs/google/historical_search_volume/live',
           requestBody
         );
 
         const task = response.data?.tasks?.[0];
+        console.log(`  📋 API Response - status_code: ${task?.status_code}, items count: ${task?.result?.[0]?.items?.length || 0}`);
+
         if (task?.status_code === 20000 && task?.result?.[0]?.items) {
-          task.result[0].items.forEach((item: any) => {
-            if (item.keyword_info?.search_volume > 0) {
+          const items = task.result[0].items;
+          let withVolume = 0;
+          let zeroVolume = 0;
+
+          items.forEach((item: any) => {
+            const searchVolume = item.keyword_info?.search_volume || 0;
+            if (searchVolume > 0) {
+              withVolume++;
               allKeywords.push({
                 keyword: item.keyword,
-                searchVolume: item.keyword_info.search_volume,
+                searchVolume: searchVolume,
                 difficulty: item.keyword_properties?.keyword_difficulty || 50,
-                cpc: item.keyword_info.cpc || 0,
-                competition: this.mapCompetition(item.keyword_info.competition),
-                trend: item.keyword_info.monthly_searches,
+                cpc: item.keyword_info?.cpc || 0,
+                competition: this.mapCompetition(item.keyword_info?.competition),
+                trend: item.keyword_info?.monthly_searches,
               });
+            } else {
+              zeroVolume++;
             }
           });
+
+          console.log(`  ✓ Batch results: ${withVolume} with volume, ${zeroVolume} with zero volume`);
+        } else {
+          console.log(`  ⚠️  Batch failed or returned no items. Status: ${task?.status_code}, Message: ${task?.status_message}`);
         }
 
         // Delay between batches
