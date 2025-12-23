@@ -28,16 +28,14 @@ async function fixFailedMigration() {
     `);
     console.log('Current status:', currentStatus.rows);
 
-    // Step 2: Mark the failed migration as rolled back
-    console.log('🔄 Marking failed migration as rolled back...');
-    const updateResult = await client.query(`
-      UPDATE "_prisma_migrations"
-      SET rolled_back_at = NOW()
-      WHERE migration_name = '20251222120000_add_people_also_ask'
-      AND finished_at IS NULL;
+    // Step 2: Delete the failed migration record completely
+    console.log('🗑️  Deleting failed migration record...');
+    const deleteResult = await client.query(`
+      DELETE FROM "_prisma_migrations"
+      WHERE migration_name = '20251222120000_add_people_also_ask';
     `);
 
-    console.log(`✅ Updated ${updateResult.rowCount} migration record(s)`);
+    console.log(`✅ Deleted ${deleteResult.rowCount} migration record(s)`);
 
     // Step 2: Check if peopleAlsoAsk column exists
     const columnCheck = await client.query(`
