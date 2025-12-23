@@ -103,9 +103,16 @@ export class DataForSEOService {
       console.log(`    📋 Autocomplete API - status: ${task?.status_code}, items: ${task?.result?.[0]?.items?.length || 0}`);
 
       if (task?.status_code === 20000 && task?.result?.[0]?.items) {
-        return task.result[0].items
-          .map((item: any) => item.keyword)
-          .filter((kw: string) => kw && kw.length > 0);
+        const items = task.result[0].items;
+
+        // Log first item structure for debugging
+        if (items.length > 0) {
+          console.log(`    🔍 First item structure:`, JSON.stringify(items[0], null, 2));
+        }
+
+        return items
+          .map((item: any) => item.keyword || item.value || item.title || item)
+          .filter((kw: string) => kw && typeof kw === 'string' && kw.length > 0);
       }
 
       if (task?.status_code !== 20000) {
