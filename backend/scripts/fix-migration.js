@@ -28,11 +28,11 @@ async function fixFailedMigration() {
     `);
     console.log('Current status:', currentStatus.rows);
 
-    // Step 2: Delete the failed migration record completely
-    console.log('🗑️  Deleting failed migration record...');
+    // Step 2: Delete ALL peopleAlsoAsk migration records (failed or not)
+    console.log('🗑️  Deleting all peopleAlsoAsk migration records...');
     const deleteResult = await client.query(`
       DELETE FROM "_prisma_migrations"
-      WHERE migration_name = '20251222120000_add_people_also_ask';
+      WHERE migration_name LIKE '%people_also_ask%';
     `);
 
     console.log(`✅ Deleted ${deleteResult.rowCount} migration record(s)`);
