@@ -111,7 +111,7 @@ export class DataForSEOService {
         }
 
         return items
-          .map((item: any) => item.keyword || item.value || item.title || item)
+          .map((item: any) => item.suggestion)
           .filter((kw: string) => kw && typeof kw === 'string' && kw.length > 0);
       }
 
