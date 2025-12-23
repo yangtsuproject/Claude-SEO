@@ -100,7 +100,7 @@ export class DataForSEOService {
       // Ensure limit is within bounds
       const keywordLimit = Math.min(Math.max(limit, 10), 100);
 
-      console.log(`📊 Fetching keyword data for ${keywords.length} keywords from DataForSEO Labs API (Singapore only, limit: ${keywordLimit})...`);
+      console.log(`📊 Fetching keyword data for ${keywords.length} keywords (limit: ${keywordLimit}/seed)...`);
 
       // Process each keyword separately for better results
       const allKeywords: KeywordData[] = [];
@@ -111,40 +111,24 @@ export class DataForSEOService {
             keyword: keyword.trim(),
             location_code: this.DEFAULT_LOCATION, // Singapore (2702)
             language_code: 'en', // English
-            depth: 2, // Get related keywords with depth
+            depth: 4, // Increased depth for more semantic variations
             limit: keywordLimit, // Configurable limit (10-100)
+            include_seed_keyword: true, // Include the original keyword
+            include_serp_info: false, // Don't need SERP data
             filters: ["keyword_data.keyword_info.search_volume", ">", 0], // Only keywords with search volume
             order_by: ["keyword_data.keyword_info.search_volume,desc"], // Sort by search volume
           },
         ];
-
-        console.log(`  Fetching RELATED keywords for: "${keyword}" (Location: ${this.DEFAULT_LOCATION} - Singapore, Limit: ${keywordLimit})`);
 
         const response = await this.axiosInstance.post<any>(
           this.apiUrl,
           requestBody
         );
 
-        // Log the full response for debugging
-        console.log(`  Full API response:`, JSON.stringify(response.data, null, 2));
-
-        // Check if we have a valid response structure
-        if (!response.data || !response.data.tasks || !Array.isArray(response.data.tasks)) {
-          console.error(`  ❌ Invalid response structure - no tasks array`);
-          continue;
-        }
-
-        const task = response.data.tasks[0];
-        console.log(`  Task status: ${task?.status_code} - ${task?.status_message}`);
-
-        // Log the location that was actually used
-        if (task?.result?.[0]) {
-          console.log(`  Location used: ${task.result[0].location_code} - ${task.result[0].location_name || 'unknown'}`);
-        }
-
         // Check if task succeeded
+        const task = response.data?.tasks?.[0];
         if (task?.status_code !== 20000) {
-          console.error(`  ❌ Task failed with code ${task?.status_code}: ${task?.status_message}`);
+          console.error(`Task failed for "${keyword}": ${task?.status_message}`);
           continue;
         }
 
@@ -164,10 +148,7 @@ export class DataForSEOService {
             });
           });
 
-          console.log(`  ✅ Found ${items.length} related keywords for "${keyword}"`);
-        } else {
-          console.warn(`  ⚠️  No items in result for "${keyword}"`);
-          console.warn(`  Result structure:`, JSON.stringify(task?.result, null, 2));
+          console.log(`  ✅ ${items.length} keywords for "${keyword}"`);
         }
 
         // Small delay between requests to avoid rate limiting
