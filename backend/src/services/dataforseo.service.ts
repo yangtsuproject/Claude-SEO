@@ -62,6 +62,7 @@ export class DataForSEOService {
   private password: string;
   private axiosInstance: AxiosInstance;
   private readonly DEFAULT_LOCATION = 2702; // Singapore location code
+  private readonly FALLBACK_LOCATION = 2840; // United States location code (better data coverage)
 
   constructor() {
     this.username = process.env.DATAFORSEO_LOGIN || '';
@@ -228,8 +229,66 @@ export class DataForSEOService {
 
       console.log(`✅ Total keywords with data: ${allKeywords.length}`);
 
+      // If Singapore returns no keywords with volume, try US location as fallback
+      if (allKeywords.length === 0 && suggestionsArray.length > 0) {
+        console.log(`  ⚠️  No keywords with volume in Singapore. Trying US location as fallback...`);
+
+        for (let i = 0; i < suggestionsArray.length; i += batchSize) {
+          const batch = suggestionsArray.slice(i, i + batchSize);
+
+          console.log(`  📊 Fetching US metrics for batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(suggestionsArray.length / batchSize)} (${batch.length} keywords)...`);
+
+          const requestBody = [{
+            keywords: batch,
+            location_code: this.FALLBACK_LOCATION, // US location
+            language_code: 'en',
+          }];
+
+          const response = await this.axiosInstance.post(
+            'https://api.dataforseo.com/v3/dataforseo_labs/google/historical_search_volume/live',
+            requestBody
+          );
+
+          const task = response.data?.tasks?.[0];
+          console.log(`  📋 US API Response - status_code: ${task?.status_code}, items count: ${task?.result?.[0]?.items?.length || 0}`);
+
+          if (task?.status_code === 20000 && task?.result?.[0]?.items) {
+            const items = task.result[0].items;
+            let withVolume = 0;
+            let zeroVolume = 0;
+
+            items.forEach((item: any) => {
+              const searchVolume = item.keyword_info?.search_volume || 0;
+              if (searchVolume > 0) {
+                withVolume++;
+                allKeywords.push({
+                  keyword: item.keyword,
+                  searchVolume: searchVolume,
+                  difficulty: item.keyword_properties?.keyword_difficulty || 50,
+                  cpc: item.keyword_info?.cpc || 0,
+                  competition: this.mapCompetition(item.keyword_info?.competition),
+                  trend: item.keyword_info?.monthly_searches,
+                });
+              } else {
+                zeroVolume++;
+              }
+            });
+
+            console.log(`  ✓ US Batch results: ${withVolume} with volume, ${zeroVolume} with zero volume`);
+          }
+
+          // Delay between batches
+          if (i + batchSize < suggestionsArray.length) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+
+        allKeywords.sort((a, b) => b.searchVolume - a.searchVolume);
+        console.log(`✅ Total keywords with US data: ${allKeywords.length}`);
+      }
+
       if (allKeywords.length === 0) {
-        throw new Error('No keyword data returned. Check DataForSEO credits and API access.');
+        throw new Error('No keyword data returned from both Singapore and US locations. Check DataForSEO credits and API access.');
       }
 
       return allKeywords;
