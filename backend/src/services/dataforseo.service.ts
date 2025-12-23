@@ -129,7 +129,7 @@ export class DataForSEOService {
 
   /**
    * Fetch keyword data from DataForSEO API using multi-source approach
-   * Combines autocomplete + related searches for comprehensive coverage
+   * Combines autocomplete + keyword ideas for comprehensive coverage
    * @param keywords Array of seed keywords to analyze
    * @param location Target location (default: Singapore)
    * @param language Target language (default: English)
@@ -143,20 +143,20 @@ export class DataForSEOService {
     limit: number = 50
   ): Promise<KeywordData[]> {
     try {
-      console.log(`📊 Fetching comprehensive keyword data (multi-source approach)...`);
+      console.log(`📊 Fetching comprehensive keyword data (autocomplete + keyword ideas)...`);
 
-      const allSuggestions = new Set<string>();
+      const allKeywordSeeds = new Set<string>();
 
       // Step 1: Get autocomplete suggestions for each seed keyword
       for (const keyword of keywords) {
         console.log(`  🔍 Getting autocomplete for "${keyword}"...`);
 
         // Add the seed keyword itself
-        allSuggestions.add(keyword.trim().toLowerCase());
+        allKeywordSeeds.add(keyword.trim().toLowerCase());
 
         // Get autocomplete suggestions
         const suggestions = await this.getAutocompleteSuggestions(keyword);
-        suggestions.forEach(s => allSuggestions.add(s.toLowerCase()));
+        suggestions.forEach(s => allKeywordSeeds.add(s.toLowerCase()));
 
         console.log(`    ✓ Found ${suggestions.length} autocomplete suggestions`);
 
@@ -164,134 +164,121 @@ export class DataForSEOService {
         await new Promise(resolve => setTimeout(resolve, 300));
       }
 
-      console.log(`  📝 Total unique keyword suggestions: ${allSuggestions.size}`);
+      console.log(`  📝 Total autocomplete seeds: ${allKeywordSeeds.size}`);
 
-      // Step 2: Get metrics for all suggestions (in batches)
-      const suggestionsArray = Array.from(allSuggestions);
+      // Step 2: Use Keyword Ideas API to expand each autocomplete suggestion
       const allKeywords: KeywordData[] = [];
-      const batchSize = 100; // DataForSEO allows up to 100 keywords per request
+      const seedsArray = Array.from(allKeywordSeeds).slice(0, 5); // Limit to first 5 seeds to avoid too many API calls
 
-      for (let i = 0; i < suggestionsArray.length; i += batchSize) {
-        const batch = suggestionsArray.slice(i, i + batchSize);
-
-        console.log(`  📊 Fetching metrics for batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(suggestionsArray.length / batchSize)} (${batch.length} keywords)...`);
+      for (const seed of seedsArray) {
+        console.log(`  🔎 Getting keyword ideas for "${seed}"...`);
 
         const requestBody = [{
-          keywords: batch,
+          keywords: [seed],
           location_code: this.DEFAULT_LOCATION,
           language_code: 'en',
+          include_seed_keyword: true,
+          limit: Math.min(limit, 50), // Limit per seed
+          filters: [
+            ['keyword_info.search_volume', '>', 0], // Only keywords with volume
+          ],
+          order_by: ['keyword_info.search_volume,desc'],
         }];
 
-        // Use Historical Search Volume endpoint (better data availability)
         const response = await this.axiosInstance.post(
-          'https://api.dataforseo.com/v3/dataforseo_labs/google/historical_search_volume/live',
+          'https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_ideas/live',
           requestBody
         );
 
         const task = response.data?.tasks?.[0];
-        console.log(`  📋 API Response - status_code: ${task?.status_code}, items count: ${task?.result?.[0]?.items?.length || 0}`);
-
         if (task?.status_code === 20000 && task?.result?.[0]?.items) {
           const items = task.result[0].items;
-          let withVolume = 0;
-          let zeroVolume = 0;
+          console.log(`    ✓ Found ${items.length} keyword ideas for "${seed}"`);
 
           items.forEach((item: any) => {
-            const searchVolume = item.keyword_info?.search_volume || 0;
-            if (searchVolume > 0) {
-              withVolume++;
+            if (item.keyword_info?.search_volume > 0) {
               allKeywords.push({
                 keyword: item.keyword,
-                searchVolume: searchVolume,
+                searchVolume: item.keyword_info.search_volume,
                 difficulty: item.keyword_properties?.keyword_difficulty || 50,
-                cpc: item.keyword_info?.cpc || 0,
-                competition: this.mapCompetition(item.keyword_info?.competition),
-                trend: item.keyword_info?.monthly_searches,
+                cpc: item.keyword_info.cpc || 0,
+                competition: this.mapCompetition(item.keyword_info.competition),
+                trend: item.keyword_info.monthly_searches,
               });
-            } else {
-              zeroVolume++;
             }
           });
-
-          console.log(`  ✓ Batch results: ${withVolume} with volume, ${zeroVolume} with zero volume`);
         } else {
-          console.log(`  ⚠️  Batch failed or returned no items. Status: ${task?.status_code}, Message: ${task?.status_message}`);
+          console.log(`    ⚠️  No keyword ideas for "${seed}". Status: ${task?.status_code}`);
         }
 
-        // Delay between batches
-        if (i + batchSize < suggestionsArray.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+        // Delay between requests
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      // Sort by search volume
-      allKeywords.sort((a, b) => b.searchVolume - a.searchVolume);
+      console.log(`  📝 Total keywords from Keyword Ideas API: ${allKeywords.length}`);
 
-      console.log(`✅ Total keywords with data: ${allKeywords.length}`);
+      // Step 3: If Singapore didn't return enough keywords, try US location
+      if (allKeywords.length < 10 && seedsArray.length > 0) {
+        console.log(`  ⚠️  Only ${allKeywords.length} keywords from Singapore. Trying US location for more coverage...`);
 
-      // If Singapore returns no keywords with volume, try US location as fallback
-      if (allKeywords.length === 0 && suggestionsArray.length > 0) {
-        console.log(`  ⚠️  No keywords with volume in Singapore. Trying US location as fallback...`);
-
-        for (let i = 0; i < suggestionsArray.length; i += batchSize) {
-          const batch = suggestionsArray.slice(i, i + batchSize);
-
-          console.log(`  📊 Fetching US metrics for batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(suggestionsArray.length / batchSize)} (${batch.length} keywords)...`);
+        for (const seed of seedsArray.slice(0, 3)) { // Try first 3 seeds with US location
+          console.log(`  🔎 Getting US keyword ideas for "${seed}"...`);
 
           const requestBody = [{
-            keywords: batch,
+            keywords: [seed],
             location_code: this.FALLBACK_LOCATION, // US location
             language_code: 'en',
+            include_seed_keyword: true,
+            limit: Math.min(limit, 50),
+            filters: [
+              ['keyword_info.search_volume', '>', 0],
+            ],
+            order_by: ['keyword_info.search_volume,desc'],
           }];
 
           const response = await this.axiosInstance.post(
-            'https://api.dataforseo.com/v3/dataforseo_labs/google/historical_search_volume/live',
+            'https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_ideas/live',
             requestBody
           );
 
           const task = response.data?.tasks?.[0];
-          console.log(`  📋 US API Response - status_code: ${task?.status_code}, items count: ${task?.result?.[0]?.items?.length || 0}`);
-
           if (task?.status_code === 20000 && task?.result?.[0]?.items) {
             const items = task.result[0].items;
-            let withVolume = 0;
-            let zeroVolume = 0;
+            console.log(`    ✓ Found ${items.length} US keyword ideas for "${seed}"`);
 
             items.forEach((item: any) => {
-              const searchVolume = item.keyword_info?.search_volume || 0;
-              if (searchVolume > 0) {
-                withVolume++;
+              if (item.keyword_info?.search_volume > 0) {
                 allKeywords.push({
                   keyword: item.keyword,
-                  searchVolume: searchVolume,
+                  searchVolume: item.keyword_info.search_volume,
                   difficulty: item.keyword_properties?.keyword_difficulty || 50,
-                  cpc: item.keyword_info?.cpc || 0,
-                  competition: this.mapCompetition(item.keyword_info?.competition),
-                  trend: item.keyword_info?.monthly_searches,
+                  cpc: item.keyword_info.cpc || 0,
+                  competition: this.mapCompetition(item.keyword_info.competition),
+                  trend: item.keyword_info.monthly_searches,
                 });
-              } else {
-                zeroVolume++;
               }
             });
-
-            console.log(`  ✓ US Batch results: ${withVolume} with volume, ${zeroVolume} with zero volume`);
           }
 
-          // Delay between batches
-          if (i + batchSize < suggestionsArray.length) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        allKeywords.sort((a, b) => b.searchVolume - a.searchVolume);
-        console.log(`✅ Total keywords with US data: ${allKeywords.length}`);
+        console.log(`  ✅ Total keywords after US fallback: ${allKeywords.length}`);
       }
 
-      if (allKeywords.length === 0) {
-        throw new Error('No keyword data returned from both Singapore and US locations. Check DataForSEO credits and API access.');
+      // Remove duplicates and sort by search volume
+      const uniqueKeywords = Array.from(
+        new Map(allKeywords.map(kw => [kw.keyword.toLowerCase(), kw])).values()
+      );
+      uniqueKeywords.sort((a, b) => b.searchVolume - a.searchVolume);
+
+      console.log(`✅ Total unique keywords: ${uniqueKeywords.length}`);
+
+      if (uniqueKeywords.length === 0) {
+        throw new Error('No keyword data returned. Check DataForSEO credits and API access.');
       }
 
-      return allKeywords;
+      return uniqueKeywords;
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const errorData = error.response?.data;
