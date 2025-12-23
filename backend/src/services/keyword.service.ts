@@ -268,6 +268,12 @@ export class KeywordService {
           },
         },
         project: true,
+        _count: {
+          select: {
+            keywords: true,
+            clusters: true,
+          },
+        },
       },
     });
   }
