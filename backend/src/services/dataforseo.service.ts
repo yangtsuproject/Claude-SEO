@@ -52,6 +52,24 @@ export interface PeopleAlsoAskQuestion {
 }
 
 /**
+ * Competitor ranking data
+ */
+export interface CompetitorData {
+  url: string;
+  domain: string;
+  position: number;
+  title: string;
+}
+
+/**
+ * Competitor keyword opportunity
+ */
+export interface CompetitorKeyword extends KeywordData {
+  competitorUrls: string[]; // URLs that rank for this keyword
+  gap: 'high' | 'medium' | 'low'; // Opportunity level
+}
+
+/**
  * DataForSEO Service
  * Handles all interactions with the DataForSEO Keywords Data API
  */
@@ -392,6 +410,230 @@ export class DataForSEOService {
     } catch (error) {
       console.error(`  ❌ Error fetching PAA for "${keyword}":`, error);
       return []; // Return empty array on error, don't fail the entire request
+    }
+  }
+
+  /**
+   * Get top-ranking competitors for a keyword
+   * @param keyword The keyword to analyze
+   * @param limit Number of top results to return (default: 3)
+   * @returns Array of competitor data
+   */
+  async getTopCompetitors(keyword: string, limit: number = 3): Promise<CompetitorData[]> {
+    try {
+      console.log(`🏆 Fetching top ${limit} competitors for: "${keyword}"...`);
+
+      const requestBody = [
+        {
+          keyword: keyword.trim(),
+          location_code: this.DEFAULT_LOCATION, // Singapore
+          language_code: 'en',
+          device: 'desktop',
+          os: 'windows',
+        },
+      ];
+
+      const response = await this.axiosInstance.post<any>(
+        'https://api.dataforseo.com/v3/serp/google/organic/live/advanced',
+        requestBody
+      );
+
+      const task = response.data?.tasks?.[0];
+
+      if (task?.status_code !== 20000) {
+        console.warn(`  ⚠️  SERP request failed: ${task?.status_message}`);
+        return [];
+      }
+
+      const items = task?.result?.[0]?.items || [];
+      const organicResults = items.filter((item: any) => item.type === 'organic');
+
+      const competitors: CompetitorData[] = organicResults
+        .slice(0, limit)
+        .map((result: any) => ({
+          url: result.url,
+          domain: result.domain,
+          position: result.rank_group,
+          title: result.title,
+        }));
+
+      console.log(`  ✅ Found ${competitors.length} top competitors`);
+      competitors.forEach((comp, idx) => {
+        console.log(`    ${idx + 1}. ${comp.domain} - ${comp.title.substring(0, 60)}`);
+      });
+
+      return competitors;
+    } catch (error) {
+      console.error(`  ❌ Error fetching competitors for "${keyword}":`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Get keywords that a competitor URL ranks for
+   * @param url The competitor URL to analyze
+   * @param limit Maximum keywords to return (default: 50)
+   * @returns Array of keywords the URL ranks for
+   */
+  async getCompetitorKeywords(url: string, limit: number = 50): Promise<KeywordData[]> {
+    try {
+      console.log(`  🔍 Analyzing keywords for URL: ${url.substring(0, 60)}...`);
+
+      const requestBody = [
+        {
+          target: url,
+          location_code: this.DEFAULT_LOCATION,
+          language_code: 'en',
+          limit: limit,
+          filters: [
+            ['keyword_data.keyword_info.search_volume', '>=', 10], // Minimum search volume
+          ],
+          order_by: ['keyword_data.keyword_info.search_volume,desc'],
+        },
+      ];
+
+      const response = await this.axiosInstance.post<any>(
+        'https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live',
+        requestBody
+      );
+
+      const task = response.data?.tasks?.[0];
+
+      if (task?.status_code !== 20000) {
+        console.warn(`    ⚠️  Ranked keywords request failed: ${task?.status_message}`);
+        return [];
+      }
+
+      const items = task?.result?.[0]?.items || [];
+
+      const keywords: KeywordData[] = items
+        .map((item: any) => ({
+          keyword: item.keyword_data?.keyword,
+          searchVolume: item.keyword_data?.keyword_info?.search_volume || 0,
+          difficulty: item.keyword_data?.keyword_properties?.keyword_difficulty || 50,
+          cpc: item.keyword_data?.keyword_info?.cpc || 0,
+          competition: this.mapCompetition(item.keyword_data?.keyword_info?.competition),
+          trend: item.keyword_data?.keyword_info?.monthly_searches,
+        }))
+        .filter((kw) => kw.keyword && kw.searchVolume >= 10);
+
+      console.log(`    ✓ Found ${keywords.length} keywords for this URL`);
+
+      return keywords;
+    } catch (error) {
+      console.error(`    ❌ Error fetching competitor keywords for ${url}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Analyze competitive gaps - find keywords competitors rank for that we don't
+   * @param seedKeywords Our target keywords
+   * @param currentKeywords Keywords we already have
+   * @param domainRating Our domain rating for opportunity scoring
+   * @returns Array of competitor keyword opportunities
+   */
+  async analyzeCompetitiveGaps(
+    seedKeywords: string[],
+    currentKeywords: string[],
+    domainRating: number = 10
+  ): Promise<CompetitorKeyword[]> {
+    try {
+      console.log(`🔬 Analyzing competitive gaps for ${seedKeywords.length} seed keywords...`);
+      console.log(`   Your DR: ${domainRating}`);
+
+      const competitorKeywordsMap = new Map<string, CompetitorKeyword>();
+      const currentKeywordsSet = new Set(currentKeywords.map((kw) => kw.toLowerCase()));
+
+      // For each seed keyword, find top competitors
+      for (const seedKeyword of seedKeywords.slice(0, 2)) {
+        // Limit to 2 seeds to save API credits
+        console.log(`\n  📊 Analyzing competitors for: "${seedKeyword}"`);
+
+        // Get top 3 competitors
+        const competitors = await this.getTopCompetitors(seedKeyword, 3);
+
+        if (competitors.length === 0) {
+          console.log(`    ⚠️  No competitors found, skipping...`);
+          continue;
+        }
+
+        // For each competitor, get their keywords
+        for (const competitor of competitors) {
+          const compKeywords = await this.getCompetitorKeywords(competitor.url, 30);
+
+          // Filter to find gaps (keywords they rank for that we don't have)
+          compKeywords.forEach((kw) => {
+            const kwLower = kw.keyword.toLowerCase();
+
+            // Skip if we already have this keyword
+            if (currentKeywordsSet.has(kwLower)) {
+              return;
+            }
+
+            // Skip if it's too different from our seed keywords (basic relevance check)
+            const isRelevant = seedKeywords.some((seed) => {
+              const seedWords = seed.toLowerCase().split(' ');
+              const kwWords = kwLower.split(' ');
+              return seedWords.some((sw) => kwWords.includes(sw));
+            });
+
+            if (!isRelevant) {
+              return;
+            }
+
+            // Calculate opportunity gap level based on DR vs KD
+            let gap: 'high' | 'medium' | 'low';
+            if (kw.difficulty <= domainRating + 15) {
+              gap = 'high'; // Easy to rank
+            } else if (kw.difficulty <= domainRating + 30) {
+              gap = 'medium'; // Possible
+            } else {
+              gap = 'low'; // Difficult
+            }
+
+            // Add or update in map
+            if (competitorKeywordsMap.has(kwLower)) {
+              const existing = competitorKeywordsMap.get(kwLower)!;
+              if (!existing.competitorUrls.includes(competitor.url)) {
+                existing.competitorUrls.push(competitor.url);
+              }
+            } else {
+              competitorKeywordsMap.set(kwLower, {
+                ...kw,
+                competitorUrls: [competitor.url],
+                gap,
+              });
+            }
+          });
+
+          // Small delay to avoid rate limits
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        // Delay between seed keywords
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      const competitorKeywords = Array.from(competitorKeywordsMap.values());
+
+      // Sort by opportunity (high gap + high volume first)
+      competitorKeywords.sort((a, b) => {
+        const gapScore = { high: 3, medium: 2, low: 1 };
+        const scoreA = gapScore[a.gap] * Math.log(a.searchVolume + 1);
+        const scoreB = gapScore[b.gap] * Math.log(b.searchVolume + 1);
+        return scoreB - scoreA;
+      });
+
+      console.log(`\n✅ Found ${competitorKeywords.length} competitive gap opportunities`);
+      console.log(`   High opportunity: ${competitorKeywords.filter((k) => k.gap === 'high').length}`);
+      console.log(`   Medium opportunity: ${competitorKeywords.filter((k) => k.gap === 'medium').length}`);
+      console.log(`   Low opportunity: ${competitorKeywords.filter((k) => k.gap === 'low').length}`);
+
+      return competitorKeywords.slice(0, 50); // Return top 50 opportunities
+    } catch (error) {
+      console.error('❌ Error analyzing competitive gaps:', error);
+      return [];
     }
   }
 }

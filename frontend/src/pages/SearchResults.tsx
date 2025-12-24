@@ -244,40 +244,83 @@ export default function SearchResults() {
             </Card>
           )}
 
-          {/* Clusters */}
-          {research.clusters.map((cluster) => (
-            <Card key={cluster.id} className={cluster.type === 'main' ? 'border-2 border-purple-300 dark:border-purple-700' : ''}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
+          {/* Competitor Opportunities Info */}
+          {research.clusters.some(c => c.type === 'competitor') && (
+            <Card className="bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-950 dark:to-yellow-950 border-orange-200 dark:border-orange-800">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl">🏆</div>
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      {cluster.type === 'main' && <span className="text-2xl">🏛️</span>}
-                      <CardTitle className="text-xl">{cluster.name}</CardTitle>
-                    </div>
-                    <div className="flex gap-4 text-sm text-muted-foreground">
-                      <span>
-                        <strong>Keywords:</strong> {cluster.keywordCount}
-                      </span>
-                      {cluster.searchIntent && (
-                        <span>
-                          <strong>Intent:</strong> {cluster.searchIntent}
-                        </span>
-                      )}
-                      {cluster.recommendedUrl && (
-                        <span>
-                          <strong>URL:</strong> {cluster.recommendedUrl}
-                        </span>
-                      )}
+                    <h3 className="font-semibold text-orange-900 dark:text-orange-100 mb-2">
+                      Competitor Keyword Opportunities
+                    </h3>
+                    <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
+                      These keywords are being successfully targeted by your top 3 competitors. They represent <strong>proven opportunities</strong> in your niche that you're currently missing.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                      <div className="bg-white dark:bg-gray-900 p-3 rounded border border-green-200">
+                        <div className="font-semibold mb-1 text-green-700">✅ High Opportunity</div>
+                        <div className="text-muted-foreground">Easy to rank based on your DR</div>
+                      </div>
+                      <div className="bg-white dark:bg-gray-900 p-3 rounded border border-yellow-200">
+                        <div className="font-semibold mb-1 text-yellow-700">⚠️ Medium Opportunity</div>
+                        <div className="text-muted-foreground">Challenging but achievable</div>
+                      </div>
+                      <div className="bg-white dark:bg-gray-900 p-3 rounded border border-red-200">
+                        <div className="font-semibold mb-1 text-red-700">❌ Low Opportunity</div>
+                        <div className="text-muted-foreground">Build authority first</div>
+                      </div>
                     </div>
                   </div>
-                  <Badge
-                    variant={cluster.type === 'main' ? 'default' : 'secondary'}
-                    className={cluster.type === 'main' ? 'bg-purple-600' : ''}
-                  >
-                    {cluster.type === 'main' ? '🏛️ Pillar Page' : '📄 Cluster Page'}
-                  </Badge>
                 </div>
-              </CardHeader>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Clusters */}
+          {research.clusters.map((cluster) => {
+            const isCompetitor = cluster.type === 'competitor';
+            const isPillar = cluster.type === 'main';
+            const borderClass = isPillar
+              ? 'border-2 border-purple-300 dark:border-purple-700'
+              : isCompetitor
+                ? 'border-2 border-orange-300 dark:border-orange-700'
+                : '';
+
+            return (
+              <Card key={cluster.id} className={borderClass}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        {isPillar && <span className="text-2xl">🏛️</span>}
+                        {isCompetitor && <span className="text-2xl">🏆</span>}
+                        <CardTitle className="text-xl">{cluster.name}</CardTitle>
+                      </div>
+                      <div className="flex gap-4 text-sm text-muted-foreground">
+                        <span>
+                          <strong>Keywords:</strong> {cluster.keywordCount}
+                        </span>
+                        {cluster.searchIntent && !isCompetitor && (
+                          <span>
+                            <strong>Intent:</strong> {cluster.searchIntent}
+                          </span>
+                        )}
+                        {cluster.recommendedUrl && (
+                          <span>
+                            <strong>URL:</strong> {cluster.recommendedUrl}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge
+                      variant={isPillar || isCompetitor ? 'default' : 'secondary'}
+                      className={isPillar ? 'bg-purple-600' : isCompetitor ? 'bg-orange-600' : ''}
+                    >
+                      {isPillar ? '🏛️ Pillar Page' : isCompetitor ? '🏆 Competitor Gap' : '📄 Cluster Page'}
+                    </Badge>
+                  </div>
+                </CardHeader>
               <CardContent>
                 {/* People Also Ask Questions */}
                 {cluster.peopleAlsoAsk && Array.isArray(cluster.peopleAlsoAsk) && cluster.peopleAlsoAsk.length > 0 && (
