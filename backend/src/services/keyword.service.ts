@@ -48,10 +48,36 @@ export class KeywordService {
         data: { status: 'processing' },
       });
 
-      // Step 1: Fetch keyword data from DataForSEO
-      console.log(`📊 Step 1: Fetching keyword data (limit: ${keywordLimit} per seed)...`);
+      // NEW PILLAR-FIRST APPROACH: Generate sub-clusters for each pillar
+      console.log(`🏛️ Step 0: Generating sub-clusters for ${research.seedKeywords.length} pillars...`);
+      const pillarToSubClusters: Map<string, string[]> = new Map();
+      const allKeywordsToFetch: string[] = [...research.seedKeywords]; // Include pillars themselves
+
+      for (const pillar of research.seedKeywords) {
+        try {
+          console.log(`  🌳 Generating sub-clusters for: "${pillar}"`);
+          const subClusterResult = await this.claude.generateSubClusters(
+            pillar,
+            research.project.targetLocation
+          );
+
+          pillarToSubClusters.set(pillar, subClusterResult.subClusters);
+          allKeywordsToFetch.push(...subClusterResult.subClusters);
+
+          console.log(`    ✅ Generated ${subClusterResult.subClusters.length} sub-clusters for "${pillar}"`);
+        } catch (error) {
+          console.error(`    ❌ Failed to generate sub-clusters for "${pillar}":`, error);
+          // Continue with other pillars even if one fails
+          pillarToSubClusters.set(pillar, []);
+        }
+      }
+
+      console.log(`  📊 Total keywords to fetch: ${allKeywordsToFetch.length} (${research.seedKeywords.length} pillars + ${allKeywordsToFetch.length - research.seedKeywords.length} sub-clusters)`);
+
+      // Step 1: Fetch keyword data from DataForSEO for ALL keywords (pillars + sub-clusters)
+      console.log(`📊 Step 1: Fetching keyword data from DataForSEO...`);
       const keywordData = await this.dataForSEO.getKeywordData(
-        research.seedKeywords,
+        allKeywordsToFetch,
         research.project.targetLocation,
         'English',
         keywordLimit
@@ -63,17 +89,17 @@ export class KeywordService {
 
       console.log(`✅ Received ${keywordData.length} keywords`);
 
-      // Step 2: Fetch People Also Ask questions (if enabled)
+      // Step 2: Fetch People Also Ask questions (if enabled) - only for PILLARS
       let paaQuestions: Map<string, any[]> = new Map();
       if (includePAA) {
-        console.log('❓ Step 2: Fetching People Also Ask questions (max 5 per seed)...');
-        for (const seedKeyword of research.seedKeywords) {
-          const questions = await this.dataForSEO.getPeopleAlsoAsk(seedKeyword);
+        console.log('❓ Step 2: Fetching People Also Ask questions (max 5 per pillar)...');
+        for (const pillar of research.seedKeywords) {
+          const questions = await this.dataForSEO.getPeopleAlsoAsk(pillar);
           if (questions.length > 0) {
-            // Limit to 5 questions per seed
+            // Limit to 5 questions per pillar
             const limitedQuestions = questions.slice(0, 5);
-            paaQuestions.set(seedKeyword.toLowerCase(), limitedQuestions);
-            console.log(`  ✅ Found ${limitedQuestions.length} PAA for "${seedKeyword}"`);
+            paaQuestions.set(pillar.toLowerCase(), limitedQuestions);
+            console.log(`  ✅ Found ${limitedQuestions.length} PAA for "${pillar}"`);
           }
         }
       }
@@ -108,10 +134,11 @@ export class KeywordService {
         }
       }
 
-      // Step 4: Create simple seed-based clusters (one cluster per seed, 10 keywords max)
-      console.log('📋 Step 4: Organizing keywords by seed...');
-      const clusteringResult = this.createSeedBasedClusters(
+      // Step 4: Create pillar-based clusters with sub-cluster hierarchy
+      console.log('📋 Step 4: Organizing keywords into pillar → sub-cluster hierarchy...');
+      const clusteringResult = this.createPillarBasedClusters(
         research.seedKeywords,
+        pillarToSubClusters,
         keywordData
       );
 
@@ -208,6 +235,103 @@ export class KeywordService {
 
         console.log(`    ✓ ${seed}: ${relatedKeywords.length} keywords (${dominantIntent})`);
       }
+    }
+
+    return {
+      clusters,
+      cannibalizationWarnings: [],
+    };
+  }
+
+  /**
+   * Create pillar-based clusters with sub-cluster hierarchy
+   * NEW PILLAR-FIRST APPROACH
+   *
+   * Structure:
+   * Pillar (main cluster) →
+   *   Sub-cluster 1 (child cluster)
+   *   Sub-cluster 2 (child cluster)
+   *   ...
+   */
+  private createPillarBasedClusters(
+    pillars: string[],
+    pillarToSubClusters: Map<string, string[]>,
+    allKeywords: KeywordData[]
+  ): ClusteringResponse {
+    console.log(`  🏛️ Creating pillar-based clusters for ${pillars.length} pillars...`);
+
+    const clusters: any[] = [];
+    const keywordMap = new Map(allKeywords.map(kw => [kw.keyword.toLowerCase(), kw]));
+
+    for (const pillar of pillars) {
+      const subClusterKeywords = pillarToSubClusters.get(pillar) || [];
+
+      // Get data for the pillar itself
+      const pillarData = keywordMap.get(pillar.toLowerCase());
+
+      // Get data for all sub-clusters
+      const subClustersWithData: any[] = [];
+      const allRelatedKeywords: KeywordData[] = [];
+
+      // Add pillar itself as first keyword if it has data
+      if (pillarData) {
+        allRelatedKeywords.push(pillarData);
+      }
+
+      // Process each sub-cluster
+      for (const subCluster of subClusterKeywords) {
+        const subClusterData = keywordMap.get(subCluster.toLowerCase());
+
+        if (subClusterData) {
+          allRelatedKeywords.push(subClusterData);
+
+          // Determine intent for this sub-cluster
+          const kwLower = subCluster.toLowerCase();
+          let intent = 'navigational';
+          if (kwLower.match(/price|cost|fee|pricing|rate|buy|hire|service/)) intent = 'transactional';
+          else if (kwLower.match(/what|how|why|guide|tips|learn/)) intent = 'informational';
+          else if (kwLower.match(/best|top|vs|compare|review/)) intent = 'commercial';
+
+          subClustersWithData.push({
+            name: subCluster,
+            type: 'sub',
+            recommendedUrl: `/${pillar.toLowerCase().replace(/\s+/g, '-')}/${subCluster.toLowerCase().replace(/\s+/g, '-')}`,
+            searchIntent: intent,
+            keywords: [subCluster],
+            subClusters: [],
+          });
+        }
+      }
+
+      // Determine dominant intent for the pillar based on all related keywords
+      const intents = allRelatedKeywords.map(kw => {
+        const kwLower = kw.keyword.toLowerCase();
+        if (kwLower.match(/price|cost|fee|pricing|rate|buy|hire|service/)) return 'transactional';
+        if (kwLower.match(/what|how|why|guide|tips|learn/)) return 'informational';
+        if (kwLower.match(/best|top|vs|compare|review/)) return 'commercial';
+        return 'navigational';
+      });
+
+      const intentCounts = intents.reduce((acc, intent) => {
+        acc[intent] = (acc[intent] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const dominantIntent = Object.entries(intentCounts).length > 0
+        ? Object.entries(intentCounts).sort(([,a], [,b]) => b - a)[0][0]
+        : 'navigational';
+
+      // Create the main pillar cluster
+      clusters.push({
+        name: pillar,
+        type: 'main',
+        recommendedUrl: `/${pillar.toLowerCase().replace(/\s+/g, '-')}`,
+        searchIntent: dominantIntent,
+        keywords: allRelatedKeywords.map(kw => kw.keyword), // All keywords (pillar + sub-clusters)
+        subClusters: subClustersWithData, // Nested sub-clusters
+      });
+
+      console.log(`    ✓ ${pillar}: ${allRelatedKeywords.length} keywords (${dominantIntent}), ${subClustersWithData.length} sub-clusters`);
     }
 
     return {
