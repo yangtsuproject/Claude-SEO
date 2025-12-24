@@ -345,6 +345,233 @@ IMPORTANT:
   }
 
   /**
+   * Identify keyword pillars from business description
+   * Returns short-tail, broad topic pillars that will serve as main pages
+   *
+   * @param businessDescription What the business does
+   * @param goal What the user wants to achieve
+   * @param location Target location
+   * @returns Pillar keywords with reasoning
+   */
+  async identifyKeywordPillars(
+    businessDescription: string,
+    goal: string = '',
+    location: string = 'Singapore'
+  ): Promise<{ pillars: string[]; reasoning: string }> {
+    try {
+      console.log(`🏛️ Identifying keyword pillars from business description...`);
+
+      const prompt = `You are an expert SEO strategist specializing in content pillar strategy. A user wants to rank their business in search engines.
+
+BUSINESS DESCRIPTION:
+"${businessDescription}"
+
+${goal ? `USER'S GOAL:\n"${goal}"\n` : ''}
+TARGET LOCATION: ${location}
+
+YOUR TASK:
+Identify 3-7 KEYWORD PILLARS that should serve as the main content pillars for this business. These are the foundation pages of their SEO strategy.
+
+PILLAR CRITERIA:
+1. **Short-tail keywords** (1-3 words maximum)
+2. **Broad topics** that encompass multiple sub-topics
+3. **High search intent** - what customers actually search for
+4. **Service/product categories** - not variations or long-tail
+5. **Cornerstone content** - each pillar becomes a main page
+
+EXAMPLES:
+
+Example 1 - Plumbing Business:
+- Business: "Licensed plumber offering residential repairs"
+- Pillars: ["toilet repair", "pipe repair", "water heater repair", "plumbing services", "emergency plumber"]
+
+Example 2 - Digital Marketing Agency:
+- Business: "Agency offering SEO, SEM, social media marketing"
+- Pillars: ["SEO services", "SEM services", "social media marketing", "content marketing"]
+
+Example 3 - Medical Clinic:
+- Business: "Clinic offering colonoscopy and colorectal screening"
+- Pillars: ["colonoscopy", "colorectal screening", "colon cancer screening", "polyp removal"]
+
+IMPORTANT - AVOID:
+❌ Long-tail variations (e.g., "toilet repair cost singapore")
+❌ Question keywords (e.g., "how much does SEO cost")
+❌ Branded terms (e.g., "best plumber in singapore")
+✅ Use short, broad service/topic categories only
+
+RESPONSE FORMAT:
+Return ONLY valid JSON (no markdown, no explanations):
+{
+  "pillars": ["pillar1", "pillar2", "pillar3"],
+  "reasoning": "Brief explanation of why these pillars were chosen as the content foundation"
+}
+
+Return 3-7 pillars maximum. Each pillar should be 1-3 words, representing a main service or topic category.`;
+
+      const message = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 1500,
+        temperature: 0.3,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const responseText =
+        message.content[0].type === 'text' ? message.content[0].text : '';
+
+      if (!responseText) {
+        throw new Error('Empty response from Claude API');
+      }
+
+      // Extract JSON
+      let jsonText = responseText.trim();
+      const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (codeBlockMatch) {
+        jsonText = codeBlockMatch[1];
+      }
+
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No valid JSON found in Claude response');
+      }
+
+      const result = JSON.parse(jsonMatch[0]);
+
+      if (!result.pillars || !Array.isArray(result.pillars)) {
+        throw new Error('Invalid response: missing pillars array');
+      }
+
+      console.log(`✅ Identified ${result.pillars.length} keyword pillars`);
+      console.log(`   Pillars: ${result.pillars.join(', ')}`);
+      console.log(`   Reasoning: ${result.reasoning}`);
+
+      return result;
+    } catch (error) {
+      console.error('Error identifying keyword pillars:', error);
+      throw new Error(`Failed to identify keyword pillars: ${error}`);
+    }
+  }
+
+  /**
+   * Generate sub-cluster keywords for a specific pillar
+   * Returns long-tail keywords that support the pillar page
+   *
+   * @param pillar The main pillar keyword
+   * @param location Target location
+   * @returns Sub-cluster keywords
+   */
+  async generateSubClusters(
+    pillar: string,
+    location: string = 'Singapore'
+  ): Promise<{ subClusters: string[]; reasoning: string }> {
+    try {
+      console.log(`🌳 Generating sub-clusters for pillar: "${pillar}"...`);
+
+      const prompt = `You are an expert SEO strategist. Generate long-tail keyword variations (sub-clusters) for a content pillar.
+
+PILLAR KEYWORD: "${pillar}"
+TARGET LOCATION: ${location}
+
+YOUR TASK:
+Generate 8-12 LONG-TAIL SUB-CLUSTER KEYWORDS that support this pillar. These will become supporting pages that link back to the main pillar page.
+
+SUB-CLUSTER CRITERIA:
+1. **Long-tail variations** (2-5 words)
+2. **Specific aspects** of the pillar topic
+3. **Different search intents**: informational, transactional, commercial
+4. **Natural search queries** that real users type
+5. **Include location** if relevant for local services
+
+INTENT MIX (aim for variety):
+- Informational: "what is X", "how to X", "X guide"
+- Transactional: "X cost", "X price", "X service", "hire X"
+- Commercial: "best X", "X reviews", "X comparison"
+
+EXAMPLES:
+
+Pillar: "toilet repair"
+Sub-clusters:
+- toilet bowl repair singapore
+- toilet flush repair cost
+- toilet leaking repair
+- toilet cistern repair
+- toilet repair service near me
+- how much does toilet repair cost
+- emergency toilet repair
+- toilet bowl crack repair
+
+Pillar: "SEO services"
+Sub-clusters:
+- SEO services singapore
+- SEO services pricing
+- local SEO services
+- ecommerce SEO services
+- SEO audit services
+- SEO consulting services
+- affordable SEO services
+- enterprise SEO services
+
+Pillar: "water heater repair"
+Sub-clusters:
+- water heater repair cost singapore
+- instant water heater repair
+- storage water heater repair
+- water heater not heating repair
+- water heater leaking repair
+- water heater repair service
+- emergency water heater repair
+
+RESPONSE FORMAT:
+Return ONLY valid JSON (no markdown, no explanations):
+{
+  "subClusters": ["sub1", "sub2", "sub3"],
+  "reasoning": "Brief explanation of the sub-cluster strategy"
+}
+
+Return 8-12 sub-clusters. Focus on variety of intent and specificity.`;
+
+      const message = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 1500,
+        temperature: 0.4, // Slightly higher temperature for creativity
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const responseText =
+        message.content[0].type === 'text' ? message.content[0].text : '';
+
+      if (!responseText) {
+        throw new Error('Empty response from Claude API');
+      }
+
+      // Extract JSON
+      let jsonText = responseText.trim();
+      const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (codeBlockMatch) {
+        jsonText = codeBlockMatch[1];
+      }
+
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No valid JSON found in Claude response');
+      }
+
+      const result = JSON.parse(jsonMatch[0]);
+
+      if (!result.subClusters || !Array.isArray(result.subClusters)) {
+        throw new Error('Invalid response: missing subClusters array');
+      }
+
+      console.log(`✅ Generated ${result.subClusters.length} sub-clusters for "${pillar}"`);
+      console.log(`   Sub-clusters: ${result.subClusters.join(', ')}`);
+
+      return result;
+    } catch (error) {
+      console.error('Error generating sub-clusters:', error);
+      throw new Error(`Failed to generate sub-clusters: ${error}`);
+    }
+  }
+
+  /**
    * Detect keyword cannibalization
    * Identifies keywords that are too similar and might compete
    */

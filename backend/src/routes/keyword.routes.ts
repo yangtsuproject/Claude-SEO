@@ -6,6 +6,7 @@ import {
   exportToGoogleSheets,
   deleteKeywordResearch,
   extractSeedKeywords,
+  identifyPillars,
 } from '../controllers/keyword.controller';
 import { authenticateUser } from '../middleware/auth.middleware';
 
@@ -16,10 +17,17 @@ router.use(authenticateUser);
 
 /**
  * @route   POST /api/keyword-research/extract-seeds
- * @desc    Extract seed keywords from natural language description
+ * @desc    Extract seed keywords from natural language description (OLD)
  * @access  Private
  */
 router.post('/extract-seeds', extractSeedKeywords);
+
+/**
+ * @route   POST /api/keyword-research/identify-pillars
+ * @desc    Identify keyword pillars from business description (NEW PILLAR-FIRST APPROACH)
+ * @access  Private
+ */
+router.post('/identify-pillars', identifyPillars);
 
 /**
  * @route   POST /api/keyword-research

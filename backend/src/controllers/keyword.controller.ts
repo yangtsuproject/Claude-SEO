@@ -480,3 +480,47 @@ export async function extractSeedKeywords(req: AuthenticatedRequest, res: Respon
     });
   }
 }
+
+/**
+ * Identify keyword pillars from business description
+ * NEW PILLAR-FIRST APPROACH
+ */
+export async function identifyPillars(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { businessDescription, goal, location } = req.body;
+
+    // Validation
+    if (!businessDescription || typeof businessDescription !== 'string' || businessDescription.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Business description is required and must be a non-empty string',
+      });
+    }
+
+    console.log(`🏛️ Identifying keyword pillars from business description: "${businessDescription}"`);
+    if (goal) {
+      console.log(`   Goal: "${goal}"`);
+    }
+
+    // Use Claude AI to identify content pillars
+    const result = await claudeService.identifyKeywordPillars(
+      businessDescription.trim(),
+      goal?.trim() || '',
+      location || 'Singapore'
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        pillars: result.pillars,
+        reasoning: result.reasoning,
+      },
+    });
+  } catch (error) {
+    console.error('Error identifying pillars:', error);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to identify keyword pillars',
+    });
+  }
+}
