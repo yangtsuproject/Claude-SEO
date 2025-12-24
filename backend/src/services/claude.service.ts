@@ -225,6 +225,102 @@ IMPORTANT:
   }
 
   /**
+   * Intelligently extract seed keywords from user's description
+   * @param description Natural language description of what user wants to rank for
+   * @param location Target location for context (e.g., "Singapore")
+   * @returns Array of recommended seed keywords
+   */
+  async extractSeedKeywords(
+    description: string,
+    location: string = 'Singapore'
+  ): Promise<{ seedKeywords: string[]; reasoning: string }> {
+    try {
+      console.log(`🤖 Extracting seed keywords from description...`);
+
+      const prompt = `You are an expert SEO strategist. A user wants to do keyword research and has described what they want to rank for.
+
+USER'S DESCRIPTION:
+"${description}"
+
+TARGET LOCATION: ${location}
+
+YOUR TASK:
+Analyze the description and extract 3-5 SEED KEYWORDS that will be used for keyword research. These seed keywords should:
+
+1. **Be broad enough** to find related concepts (e.g., "digital marketing" not "digital marketing consultant services in singapore")
+2. **Capture the core topics** mentioned in the description
+3. **Be relevant to ${location}** market if location-specific services are mentioned
+4. **Cover different aspects** of the topic (don't just use synonyms)
+5. **Use professional terminology** that people actually search for
+
+EXAMPLES:
+- Description: "I run a clinic offering colonoscopy and other colorectal screening services"
+  Seeds: ["colonoscopy", "colorectal screening", "colon cancer screening"]
+
+- Description: "We provide digital marketing services including SEO, SEM, and social media"
+  Seeds: ["digital marketing", "SEO services", "SEM agency", "social media marketing"]
+
+- Description: "I'm a wedding photographer in Singapore"
+  Seeds: ["wedding photographer", "wedding photography", "bridal photography"]
+
+RESPONSE FORMAT:
+Return ONLY valid JSON (no markdown, no explanations):
+{
+  "seedKeywords": ["keyword1", "keyword2", "keyword3"],
+  "reasoning": "Brief explanation of why these seeds were chosen"
+}
+
+IMPORTANT:
+- Return 3-5 seed keywords maximum
+- Each seed should be 1-3 words
+- Focus on broad concepts, not long-tail variations
+- Consider what competitors might target
+- Think about user search intent`;
+
+      const message = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 1000,
+        temperature: 0.3,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const responseText =
+        message.content[0].type === 'text' ? message.content[0].text : '';
+
+      if (!responseText) {
+        throw new Error('Empty response from Claude API');
+      }
+
+      // Extract JSON
+      let jsonText = responseText.trim();
+      const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (codeBlockMatch) {
+        jsonText = codeBlockMatch[1];
+      }
+
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No valid JSON found in Claude response');
+      }
+
+      const result = JSON.parse(jsonMatch[0]);
+
+      if (!result.seedKeywords || !Array.isArray(result.seedKeywords)) {
+        throw new Error('Invalid response: missing seedKeywords array');
+      }
+
+      console.log(`✅ Extracted ${result.seedKeywords.length} seed keywords`);
+      console.log(`   Seeds: ${result.seedKeywords.join(', ')}`);
+      console.log(`   Reasoning: ${result.reasoning}`);
+
+      return result;
+    } catch (error) {
+      console.error('Error extracting seed keywords:', error);
+      throw new Error(`Failed to extract seed keywords: ${error}`);
+    }
+  }
+
+  /**
    * Detect keyword cannibalization
    * Identifies keywords that are too similar and might compete
    */

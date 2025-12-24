@@ -246,50 +246,6 @@ export class DataForSEOService {
 
       console.log(`  📝 Total keywords after autocomplete: ${allKeywords.length}`);
 
-      // Step 3: If Singapore didn't return enough keywords, try US location
-      if (allKeywords.length < 20) {
-        console.log(`  ⚠️  Only ${allKeywords.length} keywords. Trying US location...`);
-
-        for (const keyword of keywords) {
-          const requestBody = [{
-            keywords: [keyword.trim()],
-            location_code: this.FALLBACK_LOCATION,
-            language_code: 'en',
-            include_seed_keyword: true,
-            limit: 30,
-            filters: [
-              ['keyword_info.search_volume', '>=', 10],
-            ],
-            order_by: ['keyword_info.search_volume,desc'],
-          }];
-
-          const response = await this.axiosInstance.post(
-            'https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_ideas/live',
-            requestBody
-          );
-
-          const task = response.data?.tasks?.[0];
-          if (task?.status_code === 20000 && task?.result?.[0]?.items) {
-            task.result[0].items.forEach((item: any) => {
-              if (item.keyword_info?.search_volume >= 10) {
-                allKeywords.push({
-                  keyword: item.keyword,
-                  searchVolume: item.keyword_info.search_volume,
-                  difficulty: item.keyword_properties?.keyword_difficulty || 50,
-                  cpc: item.keyword_info.cpc || 0,
-                  competition: this.mapCompetition(item.keyword_info.competition),
-                  trend: item.keyword_info.monthly_searches,
-                });
-              }
-            });
-          }
-
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        console.log(`  ✅ Total after US fallback: ${allKeywords.length}`);
-      }
-
       // Remove duplicates and sort by search volume
       const uniqueKeywords = Array.from(
         new Map(allKeywords.map(kw => [kw.keyword.toLowerCase(), kw])).values()

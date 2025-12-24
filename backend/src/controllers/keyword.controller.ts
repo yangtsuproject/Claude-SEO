@@ -4,8 +4,10 @@ import { KeywordService } from '../services/keyword.service';
 import { addKeywordResearchJob, getJobStatus } from '../queues/keyword.queue';
 import { prisma } from '../utils/prisma';
 import { google } from 'googleapis';
+import { ClaudeService } from '../services/claude.service';
 
 const keywordService = new KeywordService();
+const claudeService = new ClaudeService();
 
 /**
  * Keyword Research Controller
@@ -436,6 +438,45 @@ export async function deleteKeywordResearch(req: AuthenticatedRequest, res: Resp
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to delete keyword research',
+    });
+  }
+}
+
+/**
+ * Extract seed keywords from natural language description
+ */
+export async function extractSeedKeywords(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { description, location } = req.body;
+
+    // Validation
+    if (!description || typeof description !== 'string' || description.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Description is required and must be a non-empty string',
+      });
+    }
+
+    console.log(`🤖 Extracting seed keywords from description: "${description}"`);
+
+    // Use Claude AI to intelligently extract seed keywords
+    const result = await claudeService.extractSeedKeywords(
+      description.trim(),
+      location || 'Singapore'
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        seedKeywords: result.seedKeywords,
+        reasoning: result.reasoning,
+      },
+    });
+  } catch (error) {
+    console.error('Error extracting seed keywords:', error);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to extract seed keywords',
     });
   }
 }

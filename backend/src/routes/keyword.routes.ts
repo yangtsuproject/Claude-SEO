@@ -5,6 +5,7 @@ import {
   getProjectKeywordResearch,
   exportToGoogleSheets,
   deleteKeywordResearch,
+  extractSeedKeywords,
 } from '../controllers/keyword.controller';
 import { authenticateUser } from '../middleware/auth.middleware';
 
@@ -12,6 +13,13 @@ const router = Router();
 
 // All keyword research routes require authentication
 router.use(authenticateUser);
+
+/**
+ * @route   POST /api/keyword-research/extract-seeds
+ * @desc    Extract seed keywords from natural language description
+ * @access  Private
+ */
+router.post('/extract-seeds', extractSeedKeywords);
 
 /**
  * @route   POST /api/keyword-research
