@@ -230,6 +230,8 @@ export class DataForSEOService {
           });
         } else {
           console.log(`    ⚠️  No keyword ideas found. Status: ${task?.status_code}`);
+          console.log(`    📋 Error message: ${task?.status_message}`);
+          console.log(`    📋 Full task response:`, JSON.stringify(task, null, 2));
         }
 
         await new Promise(resolve => setTimeout(resolve, 500));
