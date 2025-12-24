@@ -123,6 +123,11 @@ export const projectsApi = {
 
 // Keyword Research
 export const keywordResearchApi = {
+  extractSeeds: (data: { description: string; location?: string }) =>
+    api.post<{
+      success: boolean;
+      data: { seedKeywords: string[]; reasoning: string };
+    }>('/keyword-research/extract-seeds', data),
   create: (data: {
     projectId: string;
     seedKeywords: string[];
