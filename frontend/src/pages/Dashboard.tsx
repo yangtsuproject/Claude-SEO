@@ -9,53 +9,58 @@ import { keywordResearchApi } from '@/lib/api';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<'business' | 'seeds' | 'config'>('business');
+  const [step, setStep] = useState<'business' | 'pillars' | 'config'>('business');
   const [businessDescription, setBusinessDescription] = useState('');
-  const [suggestedSeeds, setSuggestedSeeds] = useState<string[]>([]);
-  const [selectedSeeds, setSelectedSeeds] = useState<Set<string>>(new Set());
+  const [businessGoal, setBusinessGoal] = useState('');
+  const [suggestedPillars, setSuggestedPillars] = useState<string[]>([]);
+  const [selectedPillars, setSelectedPillars] = useState<Set<string>>(new Set());
   const [aiReasoning, setAiReasoning] = useState('');
   const [domainRating, setDomainRating] = useState<number>(10);
   const [keywordLimit, setKeywordLimit] = useState<number>(50);
 
-  // Get AI seed suggestions
-  const getSeedsMutation = useMutation({
-    mutationFn: async (description: string) => {
-      const response = await keywordResearchApi.extractSeeds({
-        description,
+  // Get AI pillar suggestions (NEW PILLAR-FIRST APPROACH)
+  const getPillarsMutation = useMutation({
+    mutationFn: async (data: { businessDescription: string; goal: string }) => {
+      const response = await keywordResearchApi.identifyPillars({
+        businessDescription: data.businessDescription,
+        goal: data.goal,
         location: 'Singapore',
       });
       return response.data.data;
     },
     onSuccess: (data) => {
-      setSuggestedSeeds(data.seedKeywords);
+      setSuggestedPillars(data.pillars);
       setAiReasoning(data.reasoning);
-      // Auto-select all seeds
-      setSelectedSeeds(new Set(data.seedKeywords));
-      setStep('seeds');
+      // Auto-select all pillars
+      setSelectedPillars(new Set(data.pillars));
+      setStep('pillars');
     },
   });
 
-  const handleGetSeeds = (e: React.FormEvent) => {
+  const handleGetPillars = (e: React.FormEvent) => {
     e.preventDefault();
     if (businessDescription.trim()) {
-      getSeedsMutation.mutate(businessDescription.trim());
+      getPillarsMutation.mutate({
+        businessDescription: businessDescription.trim(),
+        goal: businessGoal.trim(),
+      });
     }
   };
 
-  const toggleSeed = (seed: string) => {
-    const newSelected = new Set(selectedSeeds);
-    if (newSelected.has(seed)) {
-      newSelected.delete(seed);
+  const togglePillar = (pillar: string) => {
+    const newSelected = new Set(selectedPillars);
+    if (newSelected.has(pillar)) {
+      newSelected.delete(pillar);
     } else {
-      newSelected.add(seed);
+      newSelected.add(pillar);
     }
-    setSelectedSeeds(newSelected);
+    setSelectedPillars(newSelected);
   };
 
   const handleStartResearch = () => {
-    if (selectedSeeds.size > 0) {
-      const seedsParam = Array.from(selectedSeeds).join(',');
-      navigate(`/search?q=${encodeURIComponent(seedsParam)}&limit=${keywordLimit}&dr=${domainRating}`);
+    if (selectedPillars.size > 0) {
+      const pillarsParam = Array.from(selectedPillars).join(',');
+      navigate(`/search?q=${encodeURIComponent(pillarsParam)}&limit=${keywordLimit}&dr=${domainRating}`);
     }
   };
 
@@ -72,43 +77,57 @@ export default function Dashboard() {
       </div>
 
       <div className="w-full max-w-3xl space-y-6">
-        {/* Step 1: Business Description */}
+        {/* Step 1: Business & Goal */}
         {step === 'business' && (
           <Card className="border-2 border-primary/20">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                <CardTitle>Step 1: Describe Your Business</CardTitle>
+                <CardTitle>Step 1: Tell Us About Your Business</CardTitle>
               </div>
               <CardDescription>
-                Tell us what you do, and our AI will suggest the best seed keywords for your niche
+                Describe your business and goals. Our AI will identify the best keyword pillars for your SEO strategy.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleGetSeeds} className="space-y-4">
+              <form onSubmit={handleGetPillars} className="space-y-4">
                 <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    What does your business do?
+                  </label>
                   <Textarea
-                    placeholder="Example: I run a digital marketing consultancy offering SEO, SEM, TikTok marketing, and Meta ads services in Singapore"
+                    placeholder="Example: I'm a licensed plumber in Singapore offering residential toilet repair, pipe repair, and water heater services"
                     value={businessDescription}
                     onChange={(e) => setBusinessDescription(e.target.value)}
-                    className="min-h-[120px] text-base"
+                    className="min-h-[100px] text-base"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    What are your SEO goals? (Optional)
+                  </label>
+                  <Textarea
+                    placeholder="Example: I want to rank for local plumbing services and attract more emergency repair customers"
+                    value={businessGoal}
+                    onChange={(e) => setBusinessGoal(e.target.value)}
+                    className="min-h-[80px] text-base"
                   />
                 </div>
                 <Button
                   type="submit"
                   size="lg"
-                  disabled={!businessDescription.trim() || getSeedsMutation.isPending}
+                  disabled={!businessDescription.trim() || getPillarsMutation.isPending}
                   className="w-full"
                 >
-                  {getSeedsMutation.isPending ? (
+                  {getPillarsMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      AI is thinking...
+                      AI is analyzing...
                     </>
                   ) : (
                     <>
                       <Sparkles className="mr-2 h-4 w-4" />
-                      Get Seed Keywords
+                      Identify Keyword Pillars
                     </>
                   )}
                 </Button>
@@ -117,39 +136,51 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Step 2: Select Seeds */}
-        {step === 'seeds' && (
+        {/* Step 2: Confirm Pillars */}
+        {step === 'pillars' && (
           <>
-            <Card className="border-2 border-green-500/20 bg-green-50/50 dark:bg-green-950/20">
+            <Card className="border-2 border-purple-500/20 bg-purple-50/50 dark:bg-purple-950/20">
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  <CardTitle>Step 2: Select Your Seed Keywords</CardTitle>
+                  <span className="text-2xl">🏛️</span>
+                  <CardTitle>Step 2: Confirm Your Content Pillars</CardTitle>
                 </div>
-                <CardDescription>
+                <CardDescription className="text-sm">
+                  <div className="font-semibold mb-1">AI Strategy:</div>
                   {aiReasoning}
+                  <div className="mt-3 p-3 bg-white dark:bg-gray-900 rounded border">
+                    <div className="text-xs font-semibold mb-1">What are content pillars?</div>
+                    <div className="text-xs text-muted-foreground">
+                      These short-tail keywords will become your main pages. For each pillar, we'll generate 8-12 long-tail sub-topics (sub-clusters) that link back to it.
+                    </div>
+                  </div>
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  {suggestedSeeds.map((seed) => (
+                  {suggestedPillars.map((pillar) => (
                     <label
-                      key={seed}
+                      key={pillar}
                       className="flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer hover:bg-accent transition-colors"
                       style={{
-                        borderColor: selectedSeeds.has(seed) ? 'rgb(34, 197, 94)' : 'transparent',
-                        backgroundColor: selectedSeeds.has(seed) ? 'rgb(240, 253, 244)' : 'transparent',
+                        borderColor: selectedPillars.has(pillar) ? 'rgb(147, 51, 234)' : 'transparent',
+                        backgroundColor: selectedPillars.has(pillar) ? 'rgb(250, 245, 255)' : 'transparent',
                       }}
                     >
                       <input
                         type="checkbox"
-                        checked={selectedSeeds.has(seed)}
-                        onChange={() => toggleSeed(seed)}
+                        checked={selectedPillars.has(pillar)}
+                        onChange={() => togglePillar(pillar)}
                         className="w-5 h-5"
                       />
-                      <span className="font-medium">{seed}</span>
-                      {selectedSeeds.has(seed) && (
-                        <CheckCircle2 className="ml-auto h-5 w-5 text-green-600" />
+                      <div className="flex-1">
+                        <div className="font-semibold">{pillar}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Main pillar page → 8-12 sub-clusters
+                        </div>
+                      </div>
+                      {selectedPillars.has(pillar) && (
+                        <CheckCircle2 className="ml-auto h-5 w-5 text-purple-600" />
                       )}
                     </label>
                   ))}
@@ -165,10 +196,10 @@ export default function Dashboard() {
                   </Button>
                   <Button
                     onClick={() => setStep('config')}
-                    disabled={selectedSeeds.size === 0}
-                    className="flex-1"
+                    disabled={selectedPillars.size === 0}
+                    className="flex-1 bg-purple-600 hover:bg-purple-700"
                   >
-                    Continue ({selectedSeeds.size} selected)
+                    Continue ({selectedPillars.size} pillars)
                   </Button>
                 </div>
               </CardContent>
@@ -189,18 +220,24 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Selected Seeds Summary */}
-              <div className="p-4 bg-muted rounded-lg">
-                <div className="text-sm font-medium mb-2">Selected Seeds:</div>
+              {/* Selected Pillars Summary */}
+              <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <span>🏛️</span>
+                  <div className="text-sm font-semibold">Selected Content Pillars:</div>
+                </div>
                 <div className="flex flex-wrap gap-2">
-                  {Array.from(selectedSeeds).map((seed) => (
+                  {Array.from(selectedPillars).map((pillar) => (
                     <span
-                      key={seed}
-                      className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm"
+                      key={pillar}
+                      className="px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium"
                     >
-                      {seed}
+                      {pillar}
                     </span>
                   ))}
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  For each pillar, we'll generate 8-12 long-tail sub-cluster keywords
                 </div>
               </div>
 
@@ -257,7 +294,7 @@ export default function Dashboard() {
               <div className="flex gap-3 pt-4">
                 <Button
                   variant="outline"
-                  onClick={() => setStep('seeds')}
+                  onClick={() => setStep('pillars')}
                   className="flex-1"
                 >
                   Back
@@ -265,9 +302,10 @@ export default function Dashboard() {
                 <Button
                   onClick={handleStartResearch}
                   size="lg"
-                  className="flex-1"
+                  className="flex-1 bg-purple-600 hover:bg-purple-700"
                 >
-                  Start Research
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Generate Sub-Clusters & Start Research
                 </Button>
               </div>
             </CardContent>
@@ -278,16 +316,19 @@ export default function Dashboard() {
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 max-w-4xl w-full">
         <div className="text-center p-6 rounded-lg border bg-card">
-          <div className="text-3xl font-bold text-primary mb-2">AI-Powered</div>
-          <div className="text-sm text-muted-foreground">Smart Seed Selection</div>
+          <div className="text-3xl mb-2">🏛️</div>
+          <div className="text-xl font-bold text-purple-600 mb-2">Pillar Strategy</div>
+          <div className="text-sm text-muted-foreground">AI identifies content pillars for your business</div>
         </div>
         <div className="text-center p-6 rounded-lg border bg-card">
-          <div className="text-3xl font-bold text-primary mb-2">Top Keywords</div>
-          <div className="text-sm text-muted-foreground">10 Per Seed (Highest Volume)</div>
+          <div className="text-3xl mb-2">🌳</div>
+          <div className="text-xl font-bold text-purple-600 mb-2">8-12 Sub-Clusters</div>
+          <div className="text-sm text-muted-foreground">Long-tail keywords per pillar</div>
         </div>
         <div className="text-center p-6 rounded-lg border bg-card">
-          <div className="text-3xl font-bold text-primary mb-2">DR-Based</div>
-          <div className="text-sm text-muted-foreground">Smart Recommendations</div>
+          <div className="text-3xl mb-2">🎯</div>
+          <div className="text-xl font-bold text-purple-600 mb-2">DR-Based Ranking</div>
+          <div className="text-sm text-muted-foreground">Keywords matched to your authority</div>
         </div>
       </div>
     </div>

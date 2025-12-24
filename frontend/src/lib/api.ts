@@ -129,6 +129,11 @@ export const keywordResearchApi = {
       success: boolean;
       data: { seedKeywords: string[]; reasoning: string };
     }>('/keyword-research/extract-seeds', data),
+  identifyPillars: (data: { businessDescription: string; goal?: string; location?: string }) =>
+    api.post<{
+      success: boolean;
+      data: { pillars: string[]; reasoning: string };
+    }>('/keyword-research/identify-pillars', data),
   create: (data: {
     projectId: string;
     seedKeywords: string[];
