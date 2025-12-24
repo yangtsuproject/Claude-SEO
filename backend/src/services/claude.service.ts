@@ -127,48 +127,70 @@ export class ClaudeService {
       )
       .join('\n');
 
-    return `You are an expert SEO strategist. Analyze the following keywords and organize them into logical, SEO-optimized clusters.
+    return `You are an expert SEO strategist. Analyze the following keywords and organize them into a PILLAR/CLUSTER content structure.
 
 KEYWORDS TO ANALYZE:
 ${keywordList}
 
-CLUSTERING RULES:
-1. **Cluster Size**: Each cluster should contain 5-8 keywords maximum to avoid keyword cannibalization
-2. **Grouping Logic**: Group keywords by:
-   - Search intent (informational, transactional, navigational, commercial)
-   - Topic similarity and semantic relevance
-   - User journey stage (awareness, consideration, decision)
-3. **Hierarchy**: Create main clusters and sub-clusters where appropriate
-   - Main clusters represent broad topics (e.g., "Colorectal Screening")
-   - Sub-clusters represent specific aspects (e.g., "Colonoscopy Procedure")
-4. **URL Structure**: Recommend clean, SEO-friendly URL slugs
-   - Main cluster: /main-topic
-   - Sub-cluster: /main-topic/sub-topic
-   - Use lowercase, hyphens for spaces, avoid special characters
-5. **Search Intent Classification**:
-   - **Informational**: User wants to learn (e.g., "what is colonoscopy")
-   - **Transactional**: User wants to buy/book (e.g., "book colonoscopy singapore")
-   - **Navigational**: User wants to find a specific page (e.g., "raffles hospital colonoscopy")
-   - **Commercial**: User is researching before buying (e.g., "best colonoscopy clinic singapore")
-6. **Cannibalization Detection**: Flag any keywords that are too similar and might compete with each other
+PILLAR/CLUSTER STRATEGY:
+Create ONE main pillar page that serves as the central hub, with 5-10 cluster pages (sub-clusters) that link back to it.
+
+1. **PILLAR PAGE (Main Cluster)**:
+   - Choose the keyword with HIGHEST search volume + MODERATE difficulty (not too competitive)
+   - Should be a broad topic that encompasses all other keywords
+   - This becomes your cornerstone content
+   - Example: "Colorectal Screening Singapore" (pillar) with sub-topics about colonoscopy, costs, procedures
+
+2. **CLUSTER PAGES (Sub-Clusters)**:
+   - Create 5-10 focused sub-clusters under the pillar
+   - Each cluster targets a specific aspect or intent
+   - Group keywords by:
+     * Search intent (informational, transactional, commercial)
+     * Topic specificity (price, procedure, comparison, etc.)
+     * User journey stage (awareness, consideration, decision)
+   - Each cluster should have 3-8 keywords maximum
+   - Link structure: All clusters link TO pillar, pillar links TO all clusters
+
+3. **Search Intent Classification**:
+   - **Informational**: User wants to learn (what, how, why questions)
+   - **Transactional**: User wants to buy/book (price, service, package)
+   - **Commercial**: User is comparing options (best, top, vs, comparison)
+   - **Navigational**: User seeks specific provider/location
+
+4. **URL Structure**:
+   - Pillar: /main-topic (e.g., /colorectal-screening)
+   - Clusters: /main-topic/sub-topic (e.g., /colorectal-screening/colonoscopy-cost)
+   - Use lowercase, hyphens for spaces, no special characters
+
+5. **Keyword Distribution**:
+   - Avoid keyword cannibalization: similar keywords go in same cluster
+   - Distribute by intent: don't mix informational + transactional
+   - Balance cluster sizes: 3-8 keywords each
 
 RESPONSE FORMAT:
-Return ONLY valid JSON (no markdown, no explanations) in this exact structure:
+Return ONLY valid JSON (no markdown, no explanations):
 
 {
   "clusters": [
     {
-      "name": "Main Cluster Name",
+      "name": "Pillar Page Topic",
       "type": "main",
-      "recommendedUrl": "/url-slug",
-      "searchIntent": "informational|transactional|navigational|commercial",
-      "keywords": ["keyword1", "keyword2", "keyword3"],
+      "recommendedUrl": "/pillar-slug",
+      "searchIntent": "informational|transactional|commercial",
+      "keywords": ["main keyword", "broad keyword 2"],
       "subClusters": [
         {
-          "name": "Sub Cluster Name",
+          "name": "Cluster 1: Specific Topic",
           "type": "sub",
-          "recommendedUrl": "/main-slug/sub-slug",
-          "searchIntent": "informational|transactional|navigational|commercial",
+          "recommendedUrl": "/pillar-slug/cluster1-slug",
+          "searchIntent": "informational",
+          "keywords": ["keyword1", "keyword2", "keyword3"]
+        },
+        {
+          "name": "Cluster 2: Another Topic",
+          "type": "sub",
+          "recommendedUrl": "/pillar-slug/cluster2-slug",
+          "searchIntent": "transactional",
           "keywords": ["keyword4", "keyword5"]
         }
       ]
@@ -176,17 +198,19 @@ Return ONLY valid JSON (no markdown, no explanations) in this exact structure:
   ],
   "cannibalizationWarnings": [
     {
-      "keywords": ["very-similar-keyword-1", "very-similar-keyword-2"],
-      "reason": "These keywords have identical search intent and should likely target the same page"
+      "keywords": ["similar-kw-1", "similar-kw-2"],
+      "reason": "These have identical intent and should target the same page"
     }
   ]
 }
 
-IMPORTANT:
-- Return ONLY the JSON object, no additional text
-- Ensure all keywords from the input are included in the clusters
-- Prioritize high-volume, low-difficulty keywords for main clusters
-- Keep clusters focused and semantically coherent`;
+CRITICAL REQUIREMENTS:
+- Create ONLY ONE main cluster (the pillar)
+- Create 5-10 sub-clusters under it
+- Pillar should have the highest volume keyword(s) with moderate difficulty
+- All keywords must be included in the output
+- Keep sub-clusters focused and distinct
+- Return ONLY JSON, no extra text`;
   }
 
   /**

@@ -20,9 +20,30 @@ export default function SearchResults() {
   const [searchParams] = useSearchParams();
   const keywords = searchParams.get('q') || '';
   const keywordLimit = parseInt(searchParams.get('limit') || '50'); // Default to 50
+  const domainRating = parseInt(searchParams.get('dr') || '10'); // Default to 10
   useApi();
 
   const [researchId, setResearchId] = useState<string | null>(null);
+
+  // DR-based recommendation logic
+  const getRecommendationLevel = (difficulty: number | null | undefined): 'recommended' | 'challenging' | 'difficult' => {
+    if (difficulty === null || difficulty === undefined) return 'challenging';
+    if (difficulty <= domainRating + 15) return 'recommended';
+    if (difficulty <= domainRating + 30) return 'challenging';
+    return 'difficult';
+  };
+
+  const getRecommendationBadge = (difficulty: number | null | undefined) => {
+    const level = getRecommendationLevel(difficulty);
+    switch (level) {
+      case 'recommended':
+        return { variant: 'default' as const, text: '✅ Recommended', className: 'bg-green-100 text-green-800 border-green-300' };
+      case 'challenging':
+        return { variant: 'secondary' as const, text: '⚠️ Challenging', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' };
+      case 'difficult':
+        return { variant: 'destructive' as const, text: '❌ Too Difficult', className: 'bg-red-100 text-red-800 border-red-300' };
+    }
+  };
 
   // Create project and start keyword research
   const startResearchMutation = useMutation({
@@ -30,7 +51,8 @@ export default function SearchResults() {
       // Create a project with the keywords as the name
       const projectResponse = await projectsApi.create({
         name: `Research: ${seedKeywords.substring(0, 50)}`,
-        targetLocation: 'United States',
+        targetLocation: 'Singapore',
+        domainRating: domainRating,
       });
 
       const project = projectResponse.data.data;
@@ -140,6 +162,25 @@ export default function SearchResults() {
       {/* Results */}
       {research?.status === 'completed' && research.clusters && research.clusters.length > 0 && (
         <div className="space-y-6">
+          {/* DR Info Banner */}
+          <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">🎯</div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    Keyword Recommendations Based on Your DR {domainRating}
+                  </h3>
+                  <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                    <p>✅ <strong>Recommended:</strong> KD ≤ {domainRating + 15} (Target these first)</p>
+                    <p>⚠️ <strong>Challenging:</strong> KD {domainRating + 16}-{domainRating + 30} (Possible with good content)</p>
+                    <p>❌ <strong>Too Difficult:</strong> KD &gt; {domainRating + 30} (Build authority first)</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
@@ -174,13 +215,45 @@ export default function SearchResults() {
             </Card>
           </div>
 
+          {/* Pillar/Cluster Hierarchy Info */}
+          {research.clusters.some(c => c.type === 'main') && (
+            <Card className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950 dark:to-blue-950 border-purple-200 dark:border-purple-800">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl">🏛️</div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-2">
+                      Pillar/Cluster Content Strategy
+                    </h3>
+                    <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">
+                      Your content is organized around a central <strong>Pillar Page</strong> with supporting <strong>Cluster Pages</strong> that link back to it.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <div className="bg-white dark:bg-gray-900 p-3 rounded border">
+                        <div className="font-semibold mb-1">🏛️ Pillar Page</div>
+                        <div className="text-muted-foreground">Broad, comprehensive content hub</div>
+                      </div>
+                      <div className="bg-white dark:bg-gray-900 p-3 rounded border">
+                        <div className="font-semibold mb-1">📄 Cluster Pages</div>
+                        <div className="text-muted-foreground">Specific topics linking to pillar</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Clusters */}
           {research.clusters.map((cluster) => (
-            <Card key={cluster.id}>
+            <Card key={cluster.id} className={cluster.type === 'main' ? 'border-2 border-purple-300 dark:border-purple-700' : ''}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-xl mb-2">{cluster.name}</CardTitle>
+                    <div className="flex items-center gap-2 mb-2">
+                      {cluster.type === 'main' && <span className="text-2xl">🏛️</span>}
+                      <CardTitle className="text-xl">{cluster.name}</CardTitle>
+                    </div>
                     <div className="flex gap-4 text-sm text-muted-foreground">
                       <span>
                         <strong>Keywords:</strong> {cluster.keywordCount}
@@ -197,8 +270,11 @@ export default function SearchResults() {
                       )}
                     </div>
                   </div>
-                  <Badge variant={cluster.type === 'main' ? 'default' : 'secondary'}>
-                    {cluster.type}
+                  <Badge
+                    variant={cluster.type === 'main' ? 'default' : 'secondary'}
+                    className={cluster.type === 'main' ? 'bg-purple-600' : ''}
+                  >
+                    {cluster.type === 'main' ? '🏛️ Pillar Page' : '📄 Cluster Page'}
                   </Badge>
                 </div>
               </CardHeader>
@@ -240,36 +316,43 @@ export default function SearchResults() {
                         <TableHead>Keyword</TableHead>
                         <TableHead className="text-right">Search Volume</TableHead>
                         <TableHead className="text-right">Difficulty</TableHead>
+                        <TableHead>Recommendation</TableHead>
                         <TableHead className="text-right">CPC</TableHead>
                         <TableHead>Competition</TableHead>
                         <TableHead>Intent</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {cluster.keywords.map((keyword) => (
-                        <TableRow key={keyword.id}>
-                          <TableCell className="font-medium">{keyword.keyword}</TableCell>
-                          <TableCell className="text-right">
-                            {keyword.searchVolume?.toLocaleString() || 'N/A'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {keyword.difficulty !== null && keyword.difficulty !== undefined
-                              ? `${keyword.difficulty}%`
-                              : 'N/A'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {keyword.cpc !== null && keyword.cpc !== undefined
-                              ? `$${keyword.cpc.toFixed(2)}`
-                              : 'N/A'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{keyword.competition || 'N/A'}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{keyword.searchIntent || 'N/A'}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {cluster.keywords.map((keyword) => {
+                        const badge = getRecommendationBadge(keyword.difficulty);
+                        return (
+                          <TableRow key={keyword.id}>
+                            <TableCell className="font-medium">{keyword.keyword}</TableCell>
+                            <TableCell className="text-right">
+                              {keyword.searchVolume?.toLocaleString() || 'N/A'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {keyword.difficulty !== null && keyword.difficulty !== undefined
+                                ? `${keyword.difficulty}%`
+                                : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={badge.className}>{badge.text}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {keyword.cpc !== null && keyword.cpc !== undefined
+                                ? `$${keyword.cpc.toFixed(2)}`
+                                : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{keyword.competition || 'N/A'}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{keyword.searchIntent || 'N/A'}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 ) : (
@@ -290,28 +373,35 @@ export default function SearchResults() {
                                 <TableHead>Keyword</TableHead>
                                 <TableHead className="text-right">Search Volume</TableHead>
                                 <TableHead className="text-right">Difficulty</TableHead>
+                                <TableHead>Recommendation</TableHead>
                                 <TableHead>Intent</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {subCluster.keywords.map((keyword) => (
-                                <TableRow key={keyword.id}>
-                                  <TableCell className="font-medium">{keyword.keyword}</TableCell>
-                                  <TableCell className="text-right">
-                                    {keyword.searchVolume?.toLocaleString() || 'N/A'}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {keyword.difficulty !== null && keyword.difficulty !== undefined
-                                      ? `${keyword.difficulty}%`
-                                      : 'N/A'}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge variant="secondary">
-                                      {keyword.searchIntent || 'N/A'}
-                                    </Badge>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
+                              {subCluster.keywords.map((keyword) => {
+                                const badge = getRecommendationBadge(keyword.difficulty);
+                                return (
+                                  <TableRow key={keyword.id}>
+                                    <TableCell className="font-medium">{keyword.keyword}</TableCell>
+                                    <TableCell className="text-right">
+                                      {keyword.searchVolume?.toLocaleString() || 'N/A'}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {keyword.difficulty !== null && keyword.difficulty !== undefined
+                                        ? `${keyword.difficulty}%`
+                                        : 'N/A'}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge className={badge.className}>{badge.text}</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant="secondary">
+                                        {keyword.searchIntent || 'N/A'}
+                                      </Badge>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
                             </TableBody>
                           </Table>
                         )}

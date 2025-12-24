@@ -25,6 +25,7 @@ model Project {
   name            String
   domain          String?
   targetLocation  String            @default("Singapore")
+  domainRating    Int?              @default(10) // DR 0-100, default 10 for new sites
   userId          String
   user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   keywordResearch KeywordResearch[]

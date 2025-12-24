@@ -97,7 +97,7 @@ export async function getProject(req: AuthenticatedRequest, res: Response) {
 export async function createProject(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId!;
-    const { name, domain, targetLocation } = req.body;
+    const { name, domain, targetLocation, domainRating } = req.body;
 
     // Validation
     if (!name || name.trim().length === 0) {
@@ -112,11 +112,12 @@ export async function createProject(req: AuthenticatedRequest, res: Response) {
         name: name.trim(),
         domain: domain?.trim() || null,
         targetLocation: targetLocation || 'Singapore',
+        domainRating: domainRating !== undefined ? Math.min(100, Math.max(0, domainRating)) : 10,
         userId,
       },
     });
 
-    console.log(`✅ Created project: ${project.name} (${project.id})`);
+    console.log(`✅ Created project: ${project.name} (${project.id}) with DR ${project.domainRating}`);
 
     return res.status(201).json({
       success: true,
@@ -138,7 +139,7 @@ export async function updateProject(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId!;
     const { id } = req.params;
-    const { name, domain, targetLocation } = req.body;
+    const { name, domain, targetLocation, domainRating } = req.body;
 
     // Check if project exists and belongs to user
     const existingProject = await prisma.project.findFirst({
@@ -159,6 +160,7 @@ export async function updateProject(req: AuthenticatedRequest, res: Response) {
         ...(name && { name: name.trim() }),
         ...(domain !== undefined && { domain: domain?.trim() || null }),
         ...(targetLocation && { targetLocation }),
+        ...(domainRating !== undefined && { domainRating: Math.min(100, Math.max(0, domainRating)) }),
       },
     });
 

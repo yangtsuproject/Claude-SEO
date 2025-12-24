@@ -45,6 +45,7 @@ export interface Project {
   name: string;
   domain?: string;
   targetLocation: string;
+  domainRating?: number; // DR 0-100
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -113,7 +114,7 @@ export interface Cluster {
 export const projectsApi = {
   getAll: () => api.get<{ success: boolean; data: Project[] }>('/projects'),
   getById: (id: string) => api.get<{ success: boolean; data: Project }>(`/projects/${id}`),
-  create: (data: { name: string; domain?: string; targetLocation?: string }) =>
+  create: (data: { name: string; domain?: string; targetLocation?: string; domainRating?: number }) =>
     api.post<{ success: boolean; data: Project }>('/projects', data),
   update: (id: string, data: Partial<Project>) =>
     api.put<{ success: boolean; data: Project }>(`/projects/${id}`, data),

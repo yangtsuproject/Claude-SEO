@@ -8,12 +8,13 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [keywords, setKeywords] = useState('');
   const [keywordLimit, setKeywordLimit] = useState<number>(50); // Default to 50
+  const [domainRating, setDomainRating] = useState<number>(10); // Default DR for new sites
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (keywords.trim()) {
-      // Navigate to search results with keywords and limit as query params
-      navigate(`/search?q=${encodeURIComponent(keywords.trim())}&limit=${keywordLimit}`);
+      // Navigate to search results with keywords, limit, and DR as query params
+      navigate(`/search?q=${encodeURIComponent(keywords.trim())}&limit=${keywordLimit}&dr=${domainRating}`);
     }
   };
 
@@ -66,6 +67,25 @@ export default function Dashboard() {
             />
             <span className="text-sm">100 keywords per seed</span>
           </label>
+        </div>
+
+        {/* Domain Rating Input */}
+        <div className="flex justify-center mt-4">
+          <div className="flex items-center gap-3 bg-muted px-4 py-2 rounded-lg">
+            <label htmlFor="dr" className="text-sm font-medium">
+              Your Domain Rating (DR):
+            </label>
+            <input
+              id="dr"
+              type="number"
+              min="0"
+              max="100"
+              value={domainRating}
+              onChange={(e) => setDomainRating(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+              className="w-16 px-2 py-1 text-center border rounded"
+            />
+            <span className="text-xs text-muted-foreground">(0-100)</span>
+          </div>
         </div>
 
         <div className="flex justify-center gap-3 mt-6">
