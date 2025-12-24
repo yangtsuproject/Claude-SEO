@@ -515,7 +515,7 @@ export class DataForSEOService {
           competition: this.mapCompetition(item.keyword_data?.keyword_info?.competition),
           trend: item.keyword_data?.keyword_info?.monthly_searches,
         }))
-        .filter((kw) => kw.keyword && kw.searchVolume >= 10);
+        .filter((kw: Partial<KeywordData>) => kw.keyword && kw.searchVolume && kw.searchVolume >= 10) as KeywordData[];
 
       console.log(`    ✓ Found ${keywords.length} keywords for this URL`);
 
