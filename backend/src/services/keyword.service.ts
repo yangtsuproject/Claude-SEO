@@ -66,12 +66,14 @@ export class KeywordService {
       // Step 2: Fetch People Also Ask questions (if enabled)
       let paaQuestions: Map<string, any[]> = new Map();
       if (includePAA) {
-        console.log('❓ Step 2: Fetching People Also Ask questions...');
+        console.log('❓ Step 2: Fetching People Also Ask questions (max 5 per seed)...');
         for (const seedKeyword of research.seedKeywords) {
           const questions = await this.dataForSEO.getPeopleAlsoAsk(seedKeyword);
           if (questions.length > 0) {
-            paaQuestions.set(seedKeyword.toLowerCase(), questions);
-            console.log(`  ✅ Found ${questions.length} PAA for "${seedKeyword}"`);
+            // Limit to 5 questions per seed
+            const limitedQuestions = questions.slice(0, 5);
+            paaQuestions.set(seedKeyword.toLowerCase(), limitedQuestions);
+            console.log(`  ✅ Found ${limitedQuestions.length} PAA for "${seedKeyword}"`);
           }
         }
       }
@@ -106,17 +108,12 @@ export class KeywordService {
         }
       }
 
-      // Step 4: Cluster keywords with Claude AI
-      console.log('🤖 Step 4: Clustering keywords with AI...');
-      const keywordsForClustering: KeywordWithMetrics[] = keywordData.map((kw) => ({
-        keyword: kw.keyword,
-        searchVolume: kw.searchVolume,
-        difficulty: kw.difficulty,
-        cpc: kw.cpc,
-        competition: kw.competition,
-      }));
-
-      const clusteringResult = await this.claude.clusterKeywords(keywordsForClustering);
+      // Step 4: Create simple seed-based clusters (one cluster per seed, 10 keywords max)
+      console.log('📋 Step 4: Organizing keywords by seed...');
+      const clusteringResult = this.createSeedBasedClusters(
+        research.seedKeywords,
+        keywordData
+      );
 
       // Step 5: Save keywords and clusters to database
       console.log('💾 Step 5: Saving to database...');
@@ -149,6 +146,74 @@ export class KeywordService {
 
       throw error;
     }
+  }
+
+  /**
+   * Create seed-based clusters (one cluster per seed, max 10 keywords each)
+   * This replaces AI clustering with a simpler, more predictable approach
+   */
+  private createSeedBasedClusters(
+    seedKeywords: string[],
+    allKeywords: KeywordData[]
+  ): ClusteringResponse {
+    console.log(`  📊 Creating clusters for ${seedKeywords.length} seeds...`);
+
+    const clusters: any[] = [];
+
+    for (const seed of seedKeywords) {
+      const seedLower = seed.toLowerCase();
+      const seedWords = seedLower.split(' ');
+
+      // Find keywords related to this seed
+      const relatedKeywords = allKeywords
+        .filter(kw => {
+          const kwLower = kw.keyword.toLowerCase();
+
+          // Keyword must contain at least one word from the seed
+          return seedWords.some(word => kwLower.includes(word));
+        })
+        // Sort by search volume (highest first)
+        .sort((a, b) => b.searchVolume - a.searchVolume)
+        // Take top 10 only
+        .slice(0, 10);
+
+      if (relatedKeywords.length > 0) {
+        // Determine dominant intent
+        const intents = relatedKeywords
+          .map(kw => {
+            const kwLower = kw.keyword.toLowerCase();
+            if (kwLower.match(/price|cost|fee|pricing|rate/)) return 'transactional';
+            if (kwLower.match(/what|how|why|guide|tips/)) return 'informational';
+            if (kwLower.match(/best|top|vs|compare|review/)) return 'commercial';
+            return 'navigational';
+          });
+
+        const intentCounts = intents.reduce((acc, intent) => {
+          acc[intent] = (acc[intent] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        const dominantIntent = Object.entries(intentCounts)
+          .sort(([,a], [,b]) => b - a)[0][0];
+
+        // Create cluster
+        clusters.push({
+          name: seed,
+          type: 'main',
+          recommendedUrl: `/${seed.toLowerCase().replace(/\s+/g, '-')}`,
+          searchIntent: dominantIntent,
+          keywords: relatedKeywords.map(kw => kw.keyword),
+          subClusters: [], // No sub-clusters for now
+        });
+
+        console.log(`    ✓ ${seed}: ${relatedKeywords.length} keywords (${dominantIntent})`);
+      }
+    }
+
+    return {
+      clusters,
+      cannibalizationWarnings: [],
+    };
   }
 
   /**

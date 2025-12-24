@@ -239,10 +239,19 @@ export class DataForSEOService {
 
       console.log(`  📝 Total intent-based keywords: ${allKeywords.length}`);
 
-      // Remove duplicates and sort by search volume
+      // Remove duplicates (including word-order variations like "seo services" vs "services seo")
+      const normalizeKeyword = (kw: string): string => {
+        // Sort words alphabetically to catch duplicates with different word orders
+        return kw.toLowerCase().split(' ').sort().join(' ');
+      };
+
       const uniqueKeywords = Array.from(
-        new Map(allKeywords.map(kw => [kw.keyword.toLowerCase(), kw])).values()
+        new Map(
+          allKeywords.map(kw => [normalizeKeyword(kw.keyword), kw])
+        ).values()
       );
+
+      console.log(`  🔄 Deduplicated: ${allKeywords.length} → ${uniqueKeywords.length} keywords`);
       uniqueKeywords.sort((a, b) => b.searchVolume - a.searchVolume);
 
       console.log(`✅ Total unique keywords: ${uniqueKeywords.length}`);
